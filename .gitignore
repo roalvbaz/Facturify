@@ -1,7 +1,7 @@
 .env.local
 .cloudflare
 node_modules
-
+docs/
 node_modules/
 .env
 dist/
