@@ -2,7 +2,7 @@ import { db } from '@/db';
 import { invoices } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
 import Link from 'next/link';
-import IngresosChart from '@/components/IngresosChart/ingresosChart';
+import IngresosChart from '@/components/ingresosChart';
 
 export default async function DashboardPage() {
   const testCompanyId = "3d8febcd-526c-4424-93f8-d8e61b6ee0df";
@@ -21,39 +21,31 @@ export default async function DashboardPage() {
   let cobradoCents = 0;
   let pendienteCents = 0;
   let mesActualCents = 0;
-  
-  // Usamos un Set para contar clientes únicos (por ejemplo, basándonos en su NIF si existe, o id)
-  const clientesUnicos = new Set();
 
-  // Preparamos los arrays para los últimos 6 meses del gráfico
-  const mesesNombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
   const chartLabels: string[] = [];
   const chartPagado: number[] = [0, 0, 0, 0, 0, 0];
   const chartPendiente: number[] = [0, 0, 0, 0, 0, 0];
 
-  // Generamos las etiquetas de los últimos 6 meses (ej: "Mar 26", "Abr 26"...)
+  const mesesNombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+
   for (let i = 5; i >= 0; i--) {
     const d = new Date(currentYear, currentMonth - i, 1);
     chartLabels.push(`${mesesNombres[d.getMonth()]} ${d.getFullYear().toString().slice(-2)}`);
   }
 
-  // Recorremos las facturas reales y vamos sumando donde toca
   listaFacturas.forEach((fac) => {
-    // Nota: Ajusta "fac.status" al nombre exacto de la columna de estado en tu esquema Drizzle
+    // Nota: Ajusta "fac.status" al nombre exacto de la columna en tu esquema si es distinto
     const esPagada = (fac as any).status === 'Pagada'; 
     const total = fac.total_cents || 0;
     const date = fac.issued_at ? new Date(fac.issued_at) : ahora;
 
-    // Sumar a los KPIs Generales
     if (esPagada) cobradoCents += total;
     else pendienteCents += total;
 
-    // Facturado este mes
     if (date.getMonth() === currentMonth && date.getFullYear() === currentYear) {
       mesActualCents += total;
     }
 
-    // Calcular en qué posición del gráfico va esta factura (0 a 5)
     const monthDiff = (currentYear - date.getFullYear()) * 12 + (currentMonth - date.getMonth());
     if (monthDiff >= 0 && monthDiff <= 5) {
       const index = 5 - monthDiff;
@@ -105,13 +97,13 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+      {/* GRÁFICO Y LISTA DE VENCIMIENTOS */}
       <div className="grid-2" style={{ marginBottom: '2rem' }}>
         <div className="card" style={{ marginBottom: 0 }}>
           <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '1.5rem', color: 'var(--text-main)', marginTop: 0 }}>
             Evolución de Ingresos (6 meses)
           </h3>
           <div style={{ height: '280px', width: '100%' }}>
-            {/* PASAMOS LOS DATOS REALES AL COMPONENTE */}
             <IngresosChart labels={chartLabels} pagado={chartPagado} pendiente={chartPendiente} />
           </div>
         </div>
@@ -133,51 +125,6 @@ export default async function DashboardPage() {
             </tbody>
           </table>
         </div>
-      </div>
-
-      {/* TABLA DE HISTORIAL (Mismo código de antes) */}
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-        <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border-color)' }}>
-          <h3 style={{ fontSize: '0.9rem', fontWeight: 700, margin: 0, color: 'var(--text-main)' }}>Historial de Facturas (Veri*factu)</h3>
-        </div>
-        <table className="data-table" style={{ margin: 0 }}>
-          <thead>
-            <tr>
-              <th>Nº Ref</th>
-              <th>Serie / Año</th>
-              <th>Fecha Emisión</th>
-              <th style={{ textAlign: 'right' }}>Total</th>
-              <th style={{ textAlign: 'center' }}>Hash Actual (Extracto)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {listaFacturas.length === 0 ? (
-              <tr>
-                <td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
-                  No hay facturas emitidas todavía. ¡Prueba a emitir una!
-                </td>
-              </tr>
-            ) : (
-              listaFacturas.map((fac) => (
-                <tr key={fac.id}>
-                  <td style={{ fontWeight: '700' }}>{fac.formatted_number}</td>
-                  <td style={{ color: 'var(--text-muted)' }}>{fac.series_code} / {fac.year}</td>
-                  <td style={{ color: 'var(--text-muted)' }}>
-                    {fac.issued_at ? new Date(fac.issued_at).toLocaleDateString() : 'Sin fecha'}
-                  </td>
-                  <td style={{ textAlign: 'right', fontWeight: '900', color: 'var(--primary)' }}>
-                    {(fac.total_cents / 100).toFixed(2)} €
-                  </td>
-                  <td style={{ textAlign: 'center', fontFamily: 'monospace', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    <span style={{ padding: '0.25rem 0.5rem', backgroundColor: '#f1f5f9', borderRadius: '4px' }}>
-                      {fac.current_hash ? `${fac.current_hash.substring(0, 16)}...` : 'N/A'}
-                    </span>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
       </div>
     </div>
   );
