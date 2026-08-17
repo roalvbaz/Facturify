@@ -1,24 +1,101 @@
+/* ==========================================================================
+   VARIABLES DE COLOR Y DISEÑO
+   ========================================================================== */
 :root {
-  --primary: #0d9488;         /* teal Facturify */
-  --primary-hover: #0b7c72;   /* teal más oscuro para hover */
+  --primary: #0d9488;
+  --primary-hover: #0b7c72;
   --bg-color: #f8fafc;
   --text-main: #1e293b;
   --text-muted: #64748b;
   --border-color: #e2e8f0;
   --card-bg: #ffffff;
-  --sidebar-bg: #16324a;      /* azul marino del dashboard */
+  --sidebar-bg: #16324a;
   --sidebar-text: #94a3b8;
   --sidebar-hover: #22415d;
   --danger: #e11d48;
-  --danger-hover: #be123c;
   --success: #059669;
   --warning: #d97706;
-  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
   --radius-xl: 1rem;
   --radius-2xl: 1.5rem;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ==========================================================================
+   LAYOUT, SIDEBAR Y MAIN
+   ========================================================================== */
+.app-layout { display: flex; height: 100vh; overflow: hidden; }
+
+.sidebar {
+  width: 280px;
+  background-color: var(--sidebar-bg);
+  color: var(--sidebar-text);
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #1e293b;
+  flex-shrink: 0;
+}
+
+.sidebar-header { padding: 1.5rem; border-bottom: 1px solid #1e293b; display: flex; align-items: center; gap: 0.75rem; }
+.sidebar-logo { background: var(--primary); color: white; width: 40px; height: 40px; border-radius: var(--radius-lg); display: flex; align-items: center; justify-content: center; }
+.sidebar-nav { flex: 1; padding: 1rem; overflow-y: auto; }
+
+.nav-btn {
+  width: 100%; padding: 0.75rem 1rem; background: transparent; color: var(--sidebar-text);
+  border: none; border-radius: var(--radius-lg); cursor: pointer; text-align: left;
+  margin-bottom: 0.35rem; font-weight: 500; transition: 0.2s; display: flex; align-items: center; text-decoration: none;
+}
+.nav-btn i { margin-right: 10px; }
+.nav-btn:hover { background-color: var(--sidebar-hover); color: white; }
+.nav-btn.active { background-color: var(--primary); color: white; }
+
+.sidebar-footer { padding: 1rem; border-top: 1px solid #1e293b; display: flex; flex-direction: column; }
+
+.main-content { flex: 1; padding: 2rem; overflow-y: auto; background-color: var(--bg-color); }
+
+/* ==========================================================================
+   GRIDS Y TARJETAS
+   ========================================================================== */
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.5rem; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+.grid-4 { display: grid; grid-template-columns: repeat(1, 1fr); gap: 1rem; }
+@media (min-width: 768px) { .grid-4 { grid-template-columns: repeat(4, 1fr); gap: 1.5rem; } }
+
+.header-title { margin-bottom: 2rem; }
+.header-title h2 { font-size: 1.5rem; font-weight: 700; color: #0f172a; margin-bottom: 0.25rem; margin-top: 0; }
+.header-title p { color: var(--text-muted); font-size: 0.875rem; margin: 0; }
+
+.card {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ==========================================================================
+   BOTONES Y TABLAS
+   ========================================================================== */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  padding: 0.75rem 1.5rem; border: none; border-radius: var(--radius-lg);
+  font-weight: 600; font-size: 0.875rem; cursor: pointer; transition: all 0.2s ease;
+}
+.btn-primary { background-color: var(--primary); color: white; }
+.btn-primary:hover { background-color: var(--primary-hover); transform: translateY(-1px); }
+
+.data-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+.data-table th, .data-table td { padding: 1rem; text-align: left; border-bottom: 1px solid #f1f5f9; }
+.data-table th { background-color: #f8fafc; color: var(--text-muted); font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
