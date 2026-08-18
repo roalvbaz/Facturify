@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 // IMPORTAMOS TU SERVER ACTION AQUÍ
 import { emitInvoiceAction } from '@/actions/invoice.actions';
 import { useRouter } from 'next/navigation';
-
+import InvoicePDFTemplate from '@/components/invoicePDFTemplate';
 export default function NuevaFacturaPage() {
   const router = useRouter();
 
@@ -18,6 +18,9 @@ export default function NuevaFacturaPage() {
   
   // Estado para bloquear el botón mientras guarda
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Estado para controlar el popup de la Vista Previa
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     let subtotalCalculado = 0;
@@ -100,8 +103,14 @@ export default function NuevaFacturaPage() {
           <p>Emite una nueva factura verificable (Veri*factu).</p>
         </div>
         <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="btn" style={{ background: 'var(--border-color)', color: 'var(--text-main)', width: 'auto' }} disabled={isSubmitting}>
-            Vista Previa
+          <button 
+            type="button" 
+            onClick={() => setShowPreview(true)} 
+            className="btn" 
+            style={{ background: 'var(--border-color)', color: 'var(--text-main)', width: 'auto' }} 
+            disabled={isSubmitting}
+          >
+            <i className="fas fa-eye"></i> Vista Previa
           </button>
           <button onClick={handleGuardarFactura} className="btn btn-primary" style={{ width: 'auto' }} disabled={isSubmitting}>
             {isSubmitting ? 'Emitiendo...' : 'Guardar Factura'}
@@ -128,7 +137,12 @@ export default function NuevaFacturaPage() {
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label>Fecha Vencimiento</label>
-            <input type="date" className="form-control" value={vencimiento} onChange={(e) => setVencimiento(e.target.value)} />
+            <input 
+              type="date" 
+              className="form-control"
+              min={fecha}
+              value={vencimiento} 
+              onChange={(e) => setVencimiento(e.target.value)} />
           </div>
         </div>
 
@@ -210,6 +224,58 @@ export default function NuevaFacturaPage() {
           </div>
         </div>
       </form>
+
+      {/* --- MODAL DE VISTA PREVIA --- */}
+      {/* --- MODAL DE VISTA PREVIA (ESTILO HISTORIAL) --- */}
+      {showPreview && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2147483647, backgroundColor: '#e2e8f0', display: 'flex', flexDirection: 'column' }}>
+          
+          {/* Barra de herramientas superior */}
+          <div style={{ backgroundColor: 'white', padding: '1rem 2rem', borderBottom: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', flexShrink: 0 }}>
+            <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#0f172a' }}>Vista Previa: Borrador de Factura</h3>
+            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+              <button onClick={() => setShowPreview(false)} style={{ background: 'transparent', color: '#64748b', border: '1px solid #cbd5e1', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>
+                Seguir Editando
+              </button>
+              <button onClick={() => { setShowPreview(false); handleGuardarFactura(); }} style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', display: 'flex', gap: '8px', alignItems: 'center', fontWeight: 600 }}>
+                <i className="fas fa-paper-plane"></i> Emitir Factura
+              </button>
+            </div>
+          </div>
+
+          {/* Área del documento PDF (con scroll interno) */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '2rem', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+            <div style={{ width: '100%', maxWidth: '900px', pointerEvents: 'none' }}>
+              
+              {/* Le pasamos un "borrador falso" a tu plantilla real */}
+              <InvoicePDFTemplate 
+                factura={{
+                  formatted_number: 'BORRADOR',
+                  issued_at: fecha,
+                  due_date: vencimiento,
+                  customer_name: cliente.nombre || 'Cliente no especificado',
+                  customer_nif: cliente.nif || '-',
+                  customer_address: cliente.direccion || '-',
+                  customer_email: cliente.email || '-',
+                  subtotal_cents: Math.round(totales.subtotal * 100),
+                  vat_total_cents: Math.round(totales.totalIva * 100),
+                  total_cents: Math.round(totales.total * 100),
+                  lines: conceptos.map(c => ({
+                    description: c.descripcion || '-',
+                    quantity: c.cantidad,
+                    unit_price_cents: Math.round((c.precio || 0) * 100),
+                    total_cents: Math.round(((c.cantidad || 0) * (c.precio || 0)) * 100),
+                    vat_percent: iva
+                  }))
+                }} 
+                empresa={{ name: "Borrador de Factura" }} 
+              />
+              
+            </div>
+          </div>
+
+        </div>
+      )}      
     </div>
   );
 }

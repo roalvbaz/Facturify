@@ -105,7 +105,8 @@ export const invoices = pgTable(
     year: integer('year').notNull(),
     number: integer('number').notNull(),
     formatted_number: varchar('formatted_number', { length: 64 }).notNull(), // Ej: "F-2026-0001"
-    issued_at: timestamp('issued_at'),
+    issued_at: timestamp('issued_at').defaultNow().notNull(),
+    due_date:timestamp(''),
     status: varchar('status', { length: 32 }).default('draft').notNull(),
 
     // Campos de encadenamiento e integridad Veri*factu
@@ -121,7 +122,7 @@ export const invoices = pgTable(
     currency: varchar('currency', { length: 8 }).default('EUR').notNull(),
 
     created_at: timestamp('created_at').defaultNow().notNull(),
-    is_locked: boolean('is_locked').default(false).notNull(), // Bloqueo fiscal de factura
+    is_locked: boolean('is_locked').default(true).notNull(), // Bloqueo fiscal de factura
   },
   (table) => ({
     invoiceNumberIdx: uniqueIndex('invoice_company_series_number_idx').on(

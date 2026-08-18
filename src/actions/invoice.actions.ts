@@ -4,6 +4,7 @@ import { eq, and } from 'drizzle-orm';
 import { db } from '@/db/index';
 import {
   companies,
+  company_members, // <-- ¡Importamos tu tabla de seguridad!
   invoice_series,
   invoices,
   invoice_lines,
@@ -13,12 +14,33 @@ import { buildCanonicalString } from '@/lib/verifactu/canonical';
 import { generateInvoiceHash } from '@/lib/verifactu/crypto';
 import { construirUrlQr } from '@/lib/verifactu/qr';
 import { EmitInvoiceSchema } from '@/lib/validations/invoice';
+import { createClient } from '@/lib/supabase/server'; // <-- Importamos Supabase
 
 export async function emitInvoiceAction(inputData: unknown) {
   try {
     console.log("--> ENTRADA REAL RECIBIDA:", JSON.stringify(inputData, null, 2));
 
-    // A. Validamos la entrada con Zod
+    // A. IDENTIFICACIÓN SEGURA DEL USUARIO (Nuevo Escudo)
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      throw new Error("No autorizado. Debes iniciar sesión.");
+    }
+
+    const membresia = await db
+      .select({ companyId: company_members.company_id })
+      .from(company_members)
+      .where(eq(company_members.user_id, user.id))
+      .limit(1);
+
+    const activeCompanyId = membresia[0]?.companyId;
+
+    if (!activeCompanyId) {
+      throw new Error("Tu usuario no tiene ninguna empresa asignada para emitir facturas.");
+    }
+
+    // B. Validamos la entrada con Zod
     const parseResult = EmitInvoiceSchema.safeParse(inputData);
     if (!parseResult.success) {
       throw new Error(`Datos inválidos: ${JSON.stringify(parseResult.error.format(), null, 2)}`);
@@ -27,16 +49,16 @@ export async function emitInvoiceAction(inputData: unknown) {
     const data = parseResult.data;
     const currentYear = new Date().getFullYear();
 
-    // B. ABRIMOS LA TRANSACCIÓN
+    // C. ABRIMOS LA TRANSACCIÓN
     return await db.transaction(async (tx) => {
       
-      // 1. Rescatamos y bloqueamos la serie
+      // 1. Rescatamos y bloqueamos la serie usando el ID REAL (activeCompanyId)
       let [currentSeries] = await tx
         .select()
         .from(invoice_series)
         .where(
           and(
-            eq(invoice_series.company_id, data.companyId),
+            eq(invoice_series.company_id, activeCompanyId), // <-- Usamos activeCompanyId
             eq(invoice_series.series_code, data.seriesCode),
             eq(invoice_series.year, currentYear)
           )
@@ -47,7 +69,7 @@ export async function emitInvoiceAction(inputData: unknown) {
         [currentSeries] = await tx
           .insert(invoice_series)
           .values({
-            company_id: data.companyId,
+            company_id: activeCompanyId, // <-- Usamos activeCompanyId
             series_code: data.seriesCode,
             year: currentYear,
             last_number: 0,
@@ -92,7 +114,7 @@ export async function emitInvoiceAction(inputData: unknown) {
       const [issuer] = await tx
         .select()
         .from(companies)
-        .where(eq(companies.id, data.companyId))
+        .where(eq(companies.id, activeCompanyId)) // <-- Usamos activeCompanyId
         .limit(1);
 
       if (!issuer) {
@@ -120,7 +142,7 @@ export async function emitInvoiceAction(inputData: unknown) {
     
       // 5. Persistencia atómica
       const [nuevaFactura] = await tx.insert(invoices).values({
-          company_id: data.companyId,
+          company_id: activeCompanyId, // <-- Usamos activeCompanyId
           customer_id: data.customerId ?? null,
           series_code: data.seriesCode,
           year: currentYear,
@@ -133,6 +155,7 @@ export async function emitInvoiceAction(inputData: unknown) {
           current_hash: currentHash,
           qr_code_url: qrUrl,
           issued_at: new Date(),
+          // due_date: new Date(data.dueDate), // ¡Descomenta esto cuando añadas la columna!
       })
       .returning();
 
@@ -170,7 +193,6 @@ export async function emitInvoiceAction(inputData: unknown) {
 
     } catch (err: any) {
     console.error("❌ ERROR CRÍTICO EN SERVER ACTION:", err);
-    // Devolvemos el error en crudo con su stack trace o detalles completos
     throw new Error(err?.message || JSON.stringify(err, Object.getOwnPropertyNames(err)));
     }
 }

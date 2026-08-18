@@ -1,7 +1,7 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'Facturify - Panel Veri*factu',
+  title: 'Facturify',
   description: 'Sistema de facturación inmutable',
 };
 
@@ -17,6 +17,7 @@ export default function RootLayout({
           rel="stylesheet" 
           href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" 
         />
+        <link rel="icon" href='logo.png'/>
         {/* CARGAMOS HTML2PDF DESDE CDN PARA EVITAR ERRORES DE NPM */}
         <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" async></script>
       </head>

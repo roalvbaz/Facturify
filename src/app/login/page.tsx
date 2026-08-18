@@ -1,5 +1,7 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import Image from 'next/image';
+import SubmitButton from '@/components/submitButton';
 
 export default async function LoginPage({
   searchParams,
@@ -17,29 +19,37 @@ export default async function LoginPage({
 
     const supabase = await createClient();
 
-    // Intentamos iniciar sesión con Supabase
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
     if (error) {
-      // Si falla, recargamos la página pasando un parámetro de error
       redirect('/login?error=true');
     }
 
-    // Si hay éxito, vamos al dashboard
     redirect('/dashboard');
   }
 
   return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f1f5f9', padding: '2rem' }}>
+      
+      {/* LA TARJETA ENGLOBA TODO */}
       <div className="card" style={{ maxWidth: '400px', width: '100%', padding: '2.5rem' }}>
         
+        {/* LOGO CENTRADO */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
+          <Image 
+            src="/img/banner.png"       
+            alt="Facturify Logo" 
+            width={280}           
+            height={65}           
+            priority              
+            style={{ objectFit: 'contain' }}
+          />
+        </div>
+
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{ width: '60px', height: '60px', backgroundColor: 'var(--primary)', color: 'white', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', margin: '0 auto 1rem auto' }}>
-            <i className="fas fa-file-invoice"></i>
-          </div>
           <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.5rem 0' }}>Acceso a Clientes</h1>
           <p style={{ color: '#64748b', fontSize: '0.875rem', margin: 0 }}>Inicia sesión para gestionar tus facturas</p>
         </div>
@@ -64,15 +74,12 @@ export default async function LoginPage({
             <input type="password" id="password" name="password" className="form-control" placeholder="••••••••" required />
           </div>
           
-          <button type="submit" className="btn btn-primary" style={{ width: '100%', padding: '0.75rem', fontSize: '1rem', fontWeight: 700, display: 'flex', justifyContent: 'center', gap: '8px' }}>
-            <i className="fas fa-sign-in-alt"></i> Entrar
-          </button>
+          <SubmitButton/>
         </form>
         
         <div style={{ textAlign: 'center', marginTop: '2rem', fontSize: '0.875rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.5rem' }}>
           <p style={{ color: '#64748b', margin: 0 }}>¿Aún no tienes cuenta? <a href="mailto:hola@tudominio.com" style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 800 }}>Contacta con nosotros</a></p>
         </div>
-
       </div>
     </div>
   );

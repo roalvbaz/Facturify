@@ -1,129 +1,103 @@
+import { createClient } from '@/lib/supabase/server';
+import { redirect } from 'next/navigation';
 import { db } from '@/db';
-import { invoices } from '@/db/schema';
-import { eq, desc } from 'drizzle-orm';
-import Link from 'next/link';
-import IngresosChart from '@/components/ingresosChart';
+import { companies, company_members } from '@/db/schema';
+import { eq } from 'drizzle-orm';
 
 export default async function DashboardPage() {
-  const testCompanyId = "3d8febcd-526c-4424-93f8-d8e61b6ee0df";
+  // 1. Verificamos quién es el usuario en Supabase Auth
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  const listaFacturas = await db
-    .select()
-    .from(invoices)
-    .where(eq(invoices.company_id, testCompanyId))
-    .orderBy(desc(invoices.issued_at));
-
-  // --- LÓGICA DE NEGOCIO: CÁLCULOS DINÁMICOS ---
-  const ahora = new Date();
-  const currentMonth = ahora.getMonth();
-  const currentYear = ahora.getFullYear();
-
-  let cobradoCents = 0;
-  let pendienteCents = 0;
-  let mesActualCents = 0;
-
-  const chartLabels: string[] = [];
-  const chartPagado: number[] = [0, 0, 0, 0, 0, 0];
-  const chartPendiente: number[] = [0, 0, 0, 0, 0, 0];
-
-  const mesesNombres = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
-
-  for (let i = 5; i >= 0; i--) {
-    const d = new Date(currentYear, currentMonth - i, 1);
-    chartLabels.push(`${mesesNombres[d.getMonth()]} ${d.getFullYear().toString().slice(-2)}`);
+  if (!user) {
+    redirect('/login');
   }
 
-  listaFacturas.forEach((fac) => {
-    // Nota: Ajusta "fac.status" al nombre exacto de la columna en tu esquema si es distinto
-    const esPagada = (fac as any).status === 'Pagada'; 
-    const total = fac.total_cents || 0;
-    const date = fac.issued_at ? new Date(fac.issued_at) : ahora;
+  // 2. Buscamos la empresa usando tu tabla intermedia company_members
+  const membresia = await db
+    .select({
+      companyId: companies.id,
+      companyName: companies.name,
+      role: company_members.role,
+    })
+    .from(company_members)
+    .innerJoin(companies, eq(company_members.company_id, companies.id))
+    .where(eq(company_members.user_id, user.id))
+    .limit(1);
 
-    if (esPagada) cobradoCents += total;
-    else pendienteCents += total;
+  const miEmpresa = membresia[0];
 
-    if (date.getMonth() === currentMonth && date.getFullYear() === currentYear) {
-      mesActualCents += total;
-    }
+  // 3. Pantalla de bloqueo si el usuario no tiene empresa asignada en company_members
+  if (!miEmpresa) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', textAlign: 'center' }}>
+        <div style={{ fontSize: '4rem', color: '#94a3b8', marginBottom: '1.5rem' }}>
+          <i className="fas fa-lock"></i>
+        </div>
+        <h2 style={{ fontSize: '2rem', fontWeight: 800, color: '#0f172a', margin: '0 0 1rem 0' }}>
+          Cuenta en revisión
+        </h2>
+        <p style={{ color: '#64748b', fontSize: '1.1rem', maxWidth: '500px', lineHeight: 1.6 }}>
+          Tu usuario (<strong>{user.email}</strong>) se ha autenticado correctamente, pero aún no está vinculado a ninguna empresa en el sistema.
+          <br /><br />
+          Contacta con el administrador para que asigne tu acceso.
+        </p>
+      </div>
+    );
+  }
 
-    const monthDiff = (currentYear - date.getFullYear()) * 12 + (currentMonth - date.getMonth());
-    if (monthDiff >= 0 && monthDiff <= 5) {
-      const index = 5 - monthDiff;
-      if (esPagada) {
-        chartPagado[index] += total / 100;
-      } else {
-        chartPendiente[index] += total / 100;
-      }
-    }
-  });
-
+  // 4. Dashboard con los datos reales de la empresa del usuario
   return (
     <div>
-      <div className="header-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2>Resumen Financiero</h2>
-          <p>Métricas e ingresos de tu empresa en tiempo real.</p>
-        </div>
-        <Link href="/test-factura" className="btn btn-primary" style={{ width: 'auto', textDecoration: 'none' }}>
-          <i className="fas fa-plus"></i> Crear Factura
-        </Link>
+      <div style={{ marginBottom: '2.5rem' }}>
+        <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.5rem 0' }}>
+          Resumen Financiero - {miEmpresa.companyName}
+        </h1>
+        <p style={{ color: '#64748b', fontSize: '1rem', margin: 0 }}>
+          Métricas e ingresos de tu empresa en tiempo real (Rol: {miEmpresa.role}).
+        </p>
       </div>
 
-      {/* TARJETAS DE INDICADORES DINÁMICAS */}
-      <div className="grid-4" style={{ marginBottom: '2rem' }}>
-        <div className="card" style={{ marginBottom: 0, padding: '1.25rem' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700 }}>TOTAL COBRADO</span>
-          <p style={{ fontSize: '24px', color: 'var(--success)', fontWeight: 900, margin: '0.5rem 0 0 0' }}>
-            {(cobradoCents / 100).toFixed(2)} €
-          </p>
+      {/* Tarjetas de Resumen */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.5rem', marginBottom: '2rem' }}>
+        <div style={{ padding: '1.5rem', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+          <p style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', margin: '0 0 0.5rem 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Cobrado</p>
+          <h3 style={{ fontSize: '2.25rem', fontWeight: 800, color: '#10b981', margin: 0 }}>0.00 €</h3>
         </div>
-        <div className="card" style={{ marginBottom: 0, padding: '1.25rem' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700 }}>PENDIENTE COBRO</span>
-          <p style={{ fontSize: '24px', color: 'var(--warning)', fontWeight: 900, margin: '0.5rem 0 0 0' }}>
-            {(pendienteCents / 100).toFixed(2)} €
-          </p>
+        
+        <div style={{ padding: '1.5rem', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+          <p style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', margin: '0 0 0.5rem 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pendiente Cobro</p>
+          <h3 style={{ fontSize: '2.25rem', fontWeight: 800, color: '#f59e0b', margin: 0 }}>0.00 €</h3>
         </div>
-        <div className="card" style={{ marginBottom: 0, padding: '1.25rem' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700 }}>FACTURADO MES</span>
-          <p style={{ fontSize: '24px', color: 'var(--primary)', fontWeight: 900, margin: '0.5rem 0 0 0' }}>
-            {(mesActualCents / 100).toFixed(2)} €
-          </p>
+        
+        <div style={{ padding: '1.5rem', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+          <p style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', margin: '0 0 0.5rem 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Facturado Mes</p>
+          <h3 style={{ fontSize: '2.25rem', fontWeight: 800, color: '#0ea5e9', margin: 0 }}>0.00 €</h3>
         </div>
-        <div className="card" style={{ marginBottom: 0, padding: '1.25rem' }}>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: 700 }}>TOTAL FACTURAS</span>
-          <p style={{ fontSize: '24px', color: 'var(--text-main)', fontWeight: 900, margin: '0.5rem 0 0 0' }}>
-            {listaFacturas.length}
-          </p>
+        
+        <div style={{ padding: '1.5rem', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05)' }}>
+          <p style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', margin: '0 0 0.5rem 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Facturas</p>
+          <h3 style={{ fontSize: '2.25rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>0</h3>
         </div>
       </div>
 
-      {/* GRÁFICO Y LISTA DE VENCIMIENTOS */}
-      <div className="grid-2" style={{ marginBottom: '2rem' }}>
-        <div className="card" style={{ marginBottom: 0 }}>
-          <h3 style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: '1.5rem', color: 'var(--text-main)', marginTop: 0 }}>
-            Evolución de Ingresos (6 meses)
-          </h3>
-          <div style={{ height: '280px', width: '100%' }}>
-            <IngresosChart labels={chartLabels} pagado={chartPagado} pendiente={chartPendiente} />
+      {/* Gráficos y Tablas Placeholder */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem' }}>
+        <div style={{ padding: '1.5rem', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+          <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', marginBottom: '1.5rem', marginTop: 0 }}>Evolución de Ingresos</h4>
+          <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#f8fafc', borderRadius: '8px', border: '1px dashed #cbd5e1' }}>
+            <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>No hay suficientes datos para generar el gráfico</p>
           </div>
         </div>
-
-        <div className="card" style={{ padding: 0, overflow: 'hidden', marginBottom: 0 }}>
-          <div style={{ padding: '1.5rem 1.5rem 1rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-main)', margin: 0 }}>Vencen en 7 días</h3>
-            <Link href="/historial" style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 600, fontSize: '0.8rem', cursor: 'pointer', textDecoration: 'none' }}>
-              Ver todas &rarr;
-            </Link>
+        
+        <div style={{ padding: '1.5rem', backgroundColor: 'white', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#0f172a', margin: 0 }}>Vencen en 7 días</h4>
+            <a href="/historial" style={{ fontSize: '0.875rem', color: '#0ea5e9', textDecoration: 'none', fontWeight: 600 }}>Ver todas &rarr;</a>
           </div>
-          <table className="data-table" style={{ margin: 0 }}>
-            <tbody>
-              <tr>
-                <td colSpan={3} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
-                  No hay facturas a punto de vencer.
-                </td>
-              </tr>
-            </tbody>
-          </table>
+          <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderTop: '1px solid #f1f5f9' }}>
+            <p style={{ color: '#94a3b8', fontSize: '0.875rem' }}>No hay facturas a punto de vencer.</p>
+          </div>
         </div>
       </div>
     </div>

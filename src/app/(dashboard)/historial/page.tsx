@@ -1,26 +1,63 @@
 import { db } from '@/db';
-import { invoices, invoice_lines, companies } from '@/db/schema';
+import { invoices, invoice_lines, companies, company_members } from '@/db/schema';
 import { eq, desc, and, ilike } from 'drizzle-orm';
 import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
+import { createClient } from '@/lib/supabase/server';
+import { redirect } from 'next/navigation';
 import InvoiceModalClient from '@/components/invoiceModalClient';
 
 export default async function HistorialPage({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string; status?: string }>;
-}) {
-  const resolvedSearchParams = await searchParams;
-  const testCompanyId = "3d8febcd-526c-4424-93f8-d8e61b6ee0df";
-  const busqueda = resolvedSearchParams.q || '';
-  const estadoFiltro = resolvedSearchParams.status || 'Todas';
+}){
 
-  const conditions = [eq(invoices.company_id, testCompanyId)];
-  if (busqueda) {
-    conditions.push(ilike(invoices.formatted_number, `%${busqueda}%`));
+  const resolvedSearchParams = await searchParams;
+
+
+  // 1. Identificamos al usuario desde supabase auth
+  const supabase = await createClient();
+  const {data: {user}} = await supabase.auth.getUser();
+
+  // Si no esta registrado en auth lo redirigimos a login
+  if (!user){
+    redirect('/login');
   }
-  if (estadoFiltro !== 'Todas') {
-    conditions.push(eq((invoices as any).status, estadoFiltro));
+
+  // 2. Buscamos la empresa asignada al usuario
+  const membresia = await db
+  .select({
+    companyId: companies.id,
+    companyName: companies.name,
+  })
+  .from(company_members)
+  .innerJoin(companies,eq(company_members.company_id,companies.id))
+  .where(eq(company_members.user_id,user.id))
+  .limit(1);
+
+  const miEmpresa = membresia[0];
+
+  if(!miEmpresa){
+    return(
+      <div style={{padding: '3rem', textAlign: 'center'}}>
+        <h2>Sin empresa asignada</h2>
+        <p>Tu usuario no tiene ninguna empresa asociada para ver el historial.</p>
+        </div>
+    );
+  }
+
+  const activeCompanyId = miEmpresa.companyId;
+  const busqueda = resolvedSearchParams.q || '';
+  const estadoFiltro = resolvedSearchParams.status ||'Todas';
+
+  // 3. Filtramos estrictamente por la empresa activa del usuario
+  const conditions = [eq(invoices.company_id,activeCompanyId)];
+  if(busqueda){
+    conditions.push(ilike(invoices.formatted_number,`%${busqueda}%`));
+  }
+  if(estadoFiltro != 'Todas'){
+    conditions.push(eq((invoices as any).status,estadoFiltro));
   }
 
   const listaFacturas = await db
@@ -28,44 +65,43 @@ export default async function HistorialPage({
     .from(invoices)
     .where(and(...conditions))
     .orderBy(desc(invoices.issued_at));
-
-  const [empresa] = await db
-    .select()
-    .from(companies)
-    .where(eq(companies.id, testCompanyId))
-    .limit(1);
+  
+  const empresa = {
+    id: miEmpresa.companyId,
+    name: miEmpresa.companyName,
+  }
 
   const todasLasLineas = await db.select().from(invoice_lines);
 
-  const facturasConLineas = listaFacturas.map(f => ({
+  const facturasConLineas = listaFacturas.map( f =>({
     ...f,
-    lines: todasLasLineas.filter(l => l.invoice_id === f.id)
+    lines: todasLasLineas.filter(l=> l.invoice_id === f.id)
   }));
 
-  async function toggleStatus(formData: FormData) {
+  async function toggleStatus(formData: FormData){
     'use server';
     const id = formData.get('id') as string;
     const currentStatus = formData.get('currentStatus') as string;
     const newStatus = currentStatus === 'Pagada' ? 'Pendiente' : 'Pagada';
 
     await db
-      .update(invoices)
-      .set({ status: newStatus } as any)
-      .where(eq(invoices.id, id));
+    .update(invoices)
+    .set({status: newStatus} as any)
+    .where(eq(invoices.id, id));
 
     revalidatePath('/historial');
     revalidatePath('/dashboard');
   }
 
-  return (
+  return(
     <div>
       <div className="header-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h2>Historial de Facturas</h2>
+          <h2>Historial de Facturas - {miEmpresa.companyName}</h2>
           <p>Consulta, busca, filtra, previsualiza y descarga tus facturas en PDF.</p>
         </div>
         <div>
-          <Link href="/test-factura" className="btn btn-primary" style={{ textDecoration: 'none', width: 'auto' }}>
+          <Link href="/nueva-factura" className="btn btn-primary" style={{ textDecoration: 'none', width: 'auto' }}>
             <i className="fas fa-plus"></i> Nueva Factura
           </Link>
         </div>

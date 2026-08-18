@@ -1,39 +1,44 @@
 import Sidebar from '@/components/sidebar';
+import { createClient } from '@/lib/supabase/server';
+import { db } from '@/db';
+import { companies, company_members } from '@/db/schema';
+import { eq } from 'drizzle-orm';
+import { redirect } from 'next/navigation';
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+export default async function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  // 1. Buscamos el usuario UNA SOLA VEZ para todo el panel
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect('/login');
+  }
+
+  // 2. Buscamos la empresa UNA SOLA VEZ
+  let nombreEmpresa = "Empresa no asignada";
+  
+  const membresia = await db
+    .select({ companyName: companies.name })
+    .from(company_members)
+    .innerJoin(companies, eq(company_members.company_id, companies.id))
+    .where(eq(company_members.user_id, user.id))
+    .limit(1);
+
+  if (membresia.length > 0) {
+    nombreEmpresa = membresia[0].companyName;
+  }
+
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'row', // <-- OBLIGAMOS a que sea horizontal
-      flexWrap: 'nowrap',   // <-- PROHIBIMOS terminantemente que salte abajo
-      height: '100vh', 
-      width: '100vw',       // <-- Ocupa todo el ancho exacto del navegador
-      overflow: 'hidden', 
-      backgroundColor: '#f8fafc' 
-    }}>
-      
-      {/* Contenedor de la barra lateral blindado */}
-      <div style={{ 
-        width: '260px', 
-        minWidth: '260px', // <-- Impide que el contenido principal la encoja o la empuje
-        height: '100vh', 
-        flexShrink: 0,
-        backgroundColor: '#1e293b' 
-      }}>
-        <Sidebar />
-      </div>
-      
-      {/* Contenido Principal */}
-      <main style={{ 
-        flexGrow: 1, 
-        minWidth: 0, // <-- Truco de oro en Flexbox: evita que el contenido interior rompa el layout
-        height: '100vh', 
-        overflowY: 'auto', 
-        padding: '2rem' 
-      }}>
+    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f1f5f9' }}>
+      {/* Pasamos los datos como props al Sidebar de Cliente */}
+      <Sidebar nombreEmpresa={nombreEmpresa} emailUsuario={user.email || 'Usuario'} />
+      <main style={{ flexGrow: 1, padding: '2rem', height: '100vh', overflowY: 'auto' }}>
         {children}
       </main>
-      
     </div>
   );
 }
