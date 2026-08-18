@@ -1,386 +1,321 @@
 'use client';
-import { showToast } from '@/lib/utils/toast';
-import { useState, useEffect } from 'react';
-import { emitInvoiceAction } from '@/actions/invoice.actions';
+
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { emitInvoiceAction } from '@/actions/invoice.actions';
+import { showToast } from '@/lib/utils/toast';
 import InvoicePDFTemplate from '@/components/invoicePDFTemplate';
 
 export default function NuevaFacturaPage() {
   const router = useRouter();
-
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
-  const [vencimiento, setVencimiento] = useState('');
-  
-  const [cliente, setCliente] = useState({ nombre: '', nif: '', email: '', direccion: '' });
-  const [guardarCliente, setGuardarCliente] = useState(true); 
-
-  const [ivaGlobal, setIvaGlobal] = useState(21);
-  
-  // NUEVO: Añadimos 'guardarCatalogo: false' al estado inicial de cada concepto
-  const [conceptos, setConceptos] = useState([
-    { id: 1, descripcion: '', cantidad: 1, precio: 0, tipoIva: 'general', ivaManual: 21, guardarCatalogo: false }
-  ]);
-  
-  const [irpf, setIrpf] = useState(0);
-  const [totales, setTotales] = useState({ subtotal: 0, totalIva: 0, totalIrpf: 0, total: 0 });
-  
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
 
-  useEffect(() => {
-    let subtotalCalculado = 0;
-    let ivaCalculado = 0;
+  // Estados del formulario
+  const [seriesCode, setSeriesCode] = useState('F');
+  const [clientName, setClientName] = useState('');
+  const [clientTaxId, setClientTaxId] = useState('');
+  const [clientAddress, setClientAddress] = useState('');
 
-    conceptos.forEach(c => {
-      const baseLinea = (c.cantidad || 0) * (c.precio || 0);
-      const ivaAplicar = c.tipoIva === 'general' ? ivaGlobal : c.ivaManual;
-      
-      subtotalCalculado += baseLinea;
-      ivaCalculado += baseLinea * ((ivaAplicar || 0) / 100);
-    });
+  const [lines, setLines] = useState([
+    { description: '', quantity: 1, unit_price: 0, vat_rate: 21 }
+  ]);
 
-    const irpfCalculado = subtotalCalculado * (irpf / 100);
-    
-    setTotales({
-      subtotal: subtotalCalculado,
-      totalIva: ivaCalculado,
-      totalIrpf: irpfCalculado,
-      total: subtotalCalculado + ivaCalculado - irpfCalculado
-    });
-  }, [conceptos, ivaGlobal, irpf]);
-
-  const addConceptRow = () => {
-    // NUEVO: Las nuevas líneas también nacen con guardarCatalogo en false
-    setConceptos([...conceptos, { id: Date.now(), descripcion: '', cantidad: 1, precio: 0, tipoIva: 'general', ivaManual: 21, guardarCatalogo: false }]);
+  const handleLineChange = (index: number, field: string, value: any) => {
+    const newLines = [...lines];
+    newLines[index] = { ...newLines[index], [field]: value };
+    setLines(newLines);
   };
 
-  const removeConceptRow = (idToRemove: number) => {
-    if (conceptos.length > 1) {
-      setConceptos(conceptos.filter(c => c.id !== idToRemove));
-    }
+  const addLine = () => {
+    setLines([...lines, { description: '', quantity: 1, unit_price: 0, vat_rate: 21 }]);
   };
 
-  const updateConcept = (id: number, field: string, value: string | number | boolean) => {
-    setConceptos(conceptos.map(c => c.id === id ? { ...c, [field]: value } : c));
+  const removeLine = (index: number) => {
+    if (lines.length === 1) return;
+    setLines(lines.filter((_, i) => i !== index));
   };
 
-  const handleGuardarFactura = async () => {
-    if (!cliente.nombre || !fecha) {
-      showToast.error("Campos incompletos", "Por favor, rellena al menos la fecha y el nombre del cliente.");
-      return;
-    }
+  // Cálculos en tiempo real para totales y vista previa
+  const subtotal = lines.reduce((acc, l) => acc + (parseFloat(String(l.quantity)) || 0) * (parseFloat(String(l.unit_price)) || 0), 0);
+  const vatTotal = lines.reduce((acc, l) => {
+    const lineSub = (parseFloat(String(l.quantity)) || 0) * (parseFloat(String(l.unit_price)) || 0);
+    const vatRate = parseFloat(String(l.vat_rate)) || 21;
+    return acc + (lineSub * (vatRate / 100));
+  }, 0);
+  const total = subtotal + vatTotal;
 
-    setIsSubmitting(true);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
 
     try {
-      const payload = new FormData();
-      payload.append("companyId", "3d8febcd-526c-4424-93f8-d8e61b6ee0df");
-      payload.append("seriesCode", "F");
-      payload.append("customerId", "");
-      payload.append("issuedAt", new Date(fecha).toISOString());
-      payload.append("dueDate", (vencimiento ? new Date(vencimiento) : new Date(fecha)).toISOString());
-      payload.append("saveCustomer", guardarCliente.toString());
-      payload.append("customerData", JSON.stringify(cliente));
-      payload.append("lines", JSON.stringify(conceptos.map(c => ({
-        description: c.descripcion || "Concepto sin descripción",
-        quantity: c.cantidad || 1,
-        unitPriceCents: Math.round((c.precio || 0) * 100),
-        vatPercent: c.tipoIva === 'general' ? ivaGlobal : c.ivaManual,
-        saveToCatalog: c.guardarCatalogo
-      }))));
-
-      console.log("Enviando payload a Veri*factu...", payload);
-
-      // Usamos el showToast.promise para gestionar la carga, éxito y error de forma fluida
-      await showToast.promise(emitInvoiceAction(payload), {
-        loading: 'Generando y firmando factura con Veri*factu...',
-        success: (result: any) => {
-          // Redirigimos al usuario al dashboard o al historial tras el éxito
-          router.push('/dashboard');
-          return `¡Factura ${result.invoice.formatted_number} emitida con éxito!`;
+      const result = await emitInvoiceAction({
+        seriesCode,
+        customerData: {
+          nombre: clientName,
+          nif: clientTaxId,
+          direccion: clientAddress,
         },
-        error: (err: any) => `Error al emitir la factura: ${err.message}`
+        lines,
       });
 
+      if (result.success) {
+        showToast.success('Factura emitida correctamente');
+        router.push('/historial');
+      }
     } catch (error: any) {
-      console.error("Error al emitir factura:", error);
-      // El showToast.promise ya gestiona el error automáticamente, 
-      // pero dejamos el catch por seguridad si ocurre algo previo.
+      showToast.error(error.message || 'Error al emitir la factura');
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
+  };
+
+  // Objeto de factura simulado para alimentar el modal de vista previa
+  const previewFactura = {
+    id: 'preview-id',
+    formatted_number: `${seriesCode}-2026-0001`,
+    issued_at: new Date().toISOString(),
+    client_name: clientName || 'Cliente General',
+    client_tax_id: clientTaxId || '-',
+    client_address: clientAddress || '-',
+    lines: lines.map(l => ({
+      description: l.description || 'Concepto sin descripción',
+      quantity: l.quantity,
+      unit_price_cents: Math.round((parseFloat(String(l.unit_price)) || 0) * 100),
+      total_amount_cents: Math.round(((parseFloat(String(l.quantity)) || 0) * (parseFloat(String(l.unit_price)) || 0) * (1 + (parseFloat(String(l.vat_rate)) || 21) / 100)) * 100),
+    })),
+    subtotal_cents: Math.round(subtotal * 100),
+    vat_total_cents: Math.round(vatTotal * 100),
+    total_cents: Math.round(total * 100),
+    qr_code_url: 'https://www.agenciatributaria.es/qr?demo=true',
+    invoice_hash: 'DEMO_HASH_VERIFACTU_PREVIEW',
+  };
+
+  const previewEmpresa = {
+    name: 'Mi Empresa S.L.',
+    tax_id: 'A12345678',
+    address: 'Plazaola Kalea 25, Donostia',
   };
 
   return (
-    <div style={{ paddingBottom: '3rem' }}>
-      <div className="header-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+    <div style={{ maxWidth: '1000px', margin: '0 auto', paddingBottom: '3rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <div>
-          <h2>Crear Factura</h2>
-          <p>Emite una nueva factura verificable (Veri*factu).</p>
+          <h2>Emitir Nueva Factura</h2>
+          <p>Rellena los datos del cliente y los conceptos. El sistema gestionará el directorio y el cifrado Veri*factu automáticamente.</p>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div>
           <button 
             type="button" 
-            onClick={() => setShowPreview(true)} 
-            disabled={isSubmitting}
-            style={{ 
-              background: 'transparent', 
-              border: 'none', 
-              cursor: isSubmitting ? 'not-allowed' : 'pointer', 
-              color: 'var(--primary)', 
-              fontSize: '1.1rem',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontWeight: 600,
-              opacity: isSubmitting ? 0.5 : 1
-            }} 
+            className="btn" 
+            style={{ background: '#f3f4f6', color: '#374151', border: '1px solid #d1d5db' }}
+            onClick={() => setShowPreview(true)}
           >
             <i className="fas fa-eye"></i> Vista Previa
-          </button>
-          <button onClick={handleGuardarFactura} className="btn btn-primary" style={{ width: 'auto' }} disabled={isSubmitting}>
-            {isSubmitting ? 'Emitiendo...' : 'Guardar Factura'}
           </button>
         </div>
       </div>
 
-      <form onSubmit={(e) => e.preventDefault()}>
-        {/* FECHAS Y NÚMERO */}
-        <div className="card" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Nº Factura</label>
-            <input type="text" className="form-control" value="Automático (al emitir)" readOnly style={{ cursor: 'not-allowed', backgroundColor: 'var(--border-color)', color: 'var(--text-muted)' }} />
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Fecha Emisión</label>
+      <form onSubmit={handleSubmit} className="card" style={{ padding: '2rem' }}>
+        {/* 1. Datos de Emisión */}
+        <div style={{ marginBottom: '2rem' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: '#4b5563', marginBottom: '1rem', textTransform: 'uppercase' }}>
+            1. Datos de Emisión
+          </h3>
+          <div style={{ maxWidth: '200px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '0.5rem' }}>Serie de Facturación</label>
             <input 
-              type="date" 
+              type="text" 
+              value={seriesCode} 
+              onChange={(e) => setSeriesCode(e.target.value)} 
               className="form-control" 
-              value={fecha} 
-              readOnly 
-              style={{ cursor: 'not-allowed', backgroundColor: 'var(--border-color)', color: 'var(--text-muted)' }} 
+              required 
             />
           </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Fecha Vencimiento</label>
-            <input 
-              type="date" 
-              className="form-control"
-              min={fecha}
-              value={vencimiento} 
-              onChange={(e) => setVencimiento(e.target.value)} />
-          </div>
         </div>
 
-        {/* DATOS DEL CLIENTE */}
-        <div className="card">
-          <div className="card-header" style={{ flexWrap: 'wrap', gap: '1rem' }}>
-            <h3 style={{ margin: 0 }}>Datos del Cliente</h3>
-            <select className="form-control" style={{ width: 'auto', padding: '5px' }}>
-              <option value="">-- Cargar de mi directorio --</option>
-            </select>
-          </div>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.5rem' }}>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <input type="text" placeholder="Nombre / Razón Social" className="form-control" value={cliente.nombre} onChange={(e) => setCliente({ ...cliente, nombre: e.target.value })} />
+        {/* 2. Datos del Cliente */}
+        <div style={{ marginBottom: '2rem' }}>
+          <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: '#4b5563', marginBottom: '1rem', textTransform: 'uppercase' }}>
+            2. Datos del Cliente
+          </h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '0.5rem' }}>Nombre o Razón Social</label>
+              <input 
+                type="text" 
+                value={clientName} 
+                onChange={(e) => setClientName(e.target.value)} 
+                placeholder="Ej. Juan Pérez / Empresa S.A." 
+                className="form-control" 
+              />
             </div>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <input type="text" placeholder="NIF / CIF" className="form-control" value={cliente.nif} onChange={(e) => setCliente({ ...cliente, nif: e.target.value })} />
-            </div>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <input type="email" placeholder="Correo Electrónico" className="form-control" value={cliente.email} onChange={(e) => setCliente({ ...cliente, email: e.target.value })} />
-            </div>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <input type="text" placeholder="Dirección Fiscal" className="form-control" value={cliente.direccion} onChange={(e) => setCliente({ ...cliente, direccion: e.target.value })} />
-            </div>
-          </div>
-        </div>
-
-        {/* CONCEPTOS */}
-        <div className="card">
-          <div className="card-header" style={{ flexWrap: 'wrap', gap: '1rem' }}>
-            <h3 style={{ margin: 0 }}>Conceptos</h3>
-            <select className="form-control" style={{ width: 'auto', padding: '5px' }}>
-              <option value="">+ Insertar del Catálogo</option>
-            </select>
-          </div>
-          
-          <div id="items-container" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {conceptos.map((concepto) => (
-              <div key={concepto.id} className="concept-row" style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', alignItems: 'center', backgroundColor: '#f8fafc', padding: '1rem', borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-color)', margin: 0 }}>
-                
-                {/* NUEVO: Campo de descripción con el botón de "Guardar en catálogo" incrustado */}
-                <div style={{ display: 'flex', flex: '1 1 200px', alignItems: 'center', position: 'relative' }}>
-                  <input 
-                    type="text" 
-                    className="form-control c-desc" 
-                    style={{ width: '100%', paddingRight: '40px' }} 
-                    placeholder="Descripción del producto/servicio" 
-                    value={concepto.descripcion} 
-                    onChange={(e) => updateConcept(concepto.id, 'descripcion', e.target.value)} 
-                  />
-                  <button 
-                    type="button" 
-                    onClick={() => updateConcept(concepto.id, 'guardarCatalogo', !concepto.guardarCatalogo)}
-                    title={concepto.guardarCatalogo ? "Se guardará en el catálogo" : "Guardar en catálogo"}
-                    style={{ 
-                      position: 'absolute', 
-                      right: '10px', 
-                      background: 'transparent', 
-                      border: 'none', 
-                      cursor: 'pointer', 
-                      color: concepto.guardarCatalogo ? 'var(--primary)' : '#cbd5e1', 
-                      fontSize: '1.2rem',
-                      transition: 'color 0.2s',
-                      padding: 0
-                    }}
-                  >
-                    <i className="fas fa-save"></i>
-                  </button>
-                </div>
-
-                <input type="number" className="form-control c-cant" style={{ width: '80px', textAlign: 'center' }} min="1" value={concepto.cantidad} onChange={(e) => updateConcept(concepto.id, 'cantidad', parseFloat(e.target.value) || 0)} />
-                <input type="number" step="0.01" className="form-control c-precio" style={{ width: '120px', textAlign: 'right' }} placeholder="Precio" value={concepto.precio || ''} onChange={(e) => updateConcept(concepto.id, 'precio', parseFloat(e.target.value) || 0)} />
-                
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  <select 
-                    className="form-control c-iva" 
-                    style={{ width: concepto.tipoIva === 'general' ? '140px' : '100px' }} 
-                    value={concepto.tipoIva} 
-                    onChange={(e) => updateConcept(concepto.id, 'tipoIva', e.target.value)}
-                  >
-                    <option value="general">General ({ivaGlobal}%)</option>
-                    <option value="manual">Manual...</option>
-                  </select>
-                  
-                  {concepto.tipoIva === 'manual' && (
-                    <div style={{ position: 'relative' }}>
-                      <input 
-                        type="number" 
-                        className="form-control" 
-                        style={{ width: '80px', paddingRight: '22px', textAlign: 'right' }} 
-                        value={concepto.ivaManual} 
-                        onChange={(e) => updateConcept(concepto.id, 'ivaManual', parseFloat(e.target.value) || 0)}
-                      />
-                      <span style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', fontSize: '0.9rem' }}>%</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="c-total" style={{ width: '90px', textAlign: 'right', fontWeight: 700, color: 'var(--text-main)', marginLeft: 'auto' }}>
-                  {((concepto.cantidad || 0) * (concepto.precio || 0)).toFixed(2)} €
-                </div>
-                <button type="button" onClick={() => removeConceptRow(concepto.id)} style={{ background: 'white', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', color: 'var(--danger)', fontSize: '1rem', cursor: 'pointer', padding: '0.6rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <i className="fas fa-trash"></i>
-                </button>
-              </div>
-            ))}
-          </div>
-          
-          <button type="button" onClick={addConceptRow} className="btn" style={{ marginTop: '1.5rem', width: 'auto', background: 'transparent', color: 'var(--primary)', border: '2px dashed var(--primary)' }}>
-            <i className="fas fa-plus"></i> Añadir Línea Libre
-          </button>
-        </div>
-
-        {/* TOTALES E IMPUESTOS */}
-        <div className="card" style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>IVA General (%)</label>
-              <div style={{ position: 'relative' }}>
-                <input 
-                  type="number" 
-                  className="form-control" 
-                  style={{ width: '120px', paddingRight: '25px' }} 
-                  value={ivaGlobal} 
-                  onChange={(e) => setIvaGlobal(parseFloat(e.target.value) || 0)} 
-                />
-                <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>%</span>
-              </div>
-            </div>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label>Retención IRPF (%)</label>
-              <div style={{ position: 'relative' }}>
-                <input 
-                  type="number" 
-                  className="form-control" 
-                  style={{ width: '120px', paddingRight: '25px' }} 
-                  value={irpf} 
-                  onChange={(e) => setIrpf(parseFloat(e.target.value) || 0)} 
-                />
-                <span style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>%</span>
-              </div>
-            </div>
-          </div>
-          
-          <div className="totales-caja" style={{ minWidth: '250px' }}>
-            <div className="totales-linea"><span>Base Imponible:</span><span>{totales.subtotal.toFixed(2)} €</span></div>
-            <div className="totales-linea"><span>IVA Repercutido:</span><span>+{totales.totalIva.toFixed(2)} €</span></div>
-            {irpf > 0 && <div className="totales-linea"><span>Retención IRPF:</span><span>-{totales.totalIrpf.toFixed(2)} €</span></div>}
-            <div className="totales-linea total-final" style={{ borderTop: '2px solid var(--border-color)', marginTop: '0.75rem', paddingTop: '0.75rem', fontWeight: 900, fontSize: '1.25rem', color: 'var(--primary)' }}>
-              <span>Total Final:</span><span>{totales.total.toFixed(2)} €</span>
-            </div>
-          </div>
-        </div>
-      </form>
-
-      {/* --- MODAL DE VISTA PREVIA (ESTILO HISTORIAL) --- */}
-      {showPreview && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 2147483647, backgroundColor: '#e2e8f0', display: 'flex', flexDirection: 'column' }}>
-          
-          <div style={{ backgroundColor: 'white', padding: '1rem 2rem', borderBottom: '1px solid #cbd5e1', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', flexShrink: 0 }}>
-            <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#0f172a' }}>Vista Previa: Borrador de Factura</h3>
-            <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-              <button onClick={() => setShowPreview(false)} style={{ background: 'transparent', color: '#64748b', border: '1px solid #cbd5e1', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', fontWeight: 600 }}>
-                Seguir Editando
-              </button>
-              <button onClick={() => { setShowPreview(false); handleGuardarFactura(); }} style={{ background: 'var(--primary)', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', display: 'flex', gap: '8px', alignItems: 'center', fontWeight: 600 }}>
-                <i className="fas fa-paper-plane"></i> Emitir Factura
-              </button>
-            </div>
-          </div>
-
-          <div style={{ flex: 1, overflowY: 'auto', padding: '2rem', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
-            <div style={{ width: '100%', maxWidth: '900px', pointerEvents: 'none' }}>
-<InvoicePDFTemplate 
-                factura={{
-                  id: 'preview',
-                  formatted_number: 'BORRADOR',
-                  issued_at: fecha,
-                  
-                  client_name: cliente.nombre || 'Cliente General',
-                  client_tax_id: cliente.nif || '-',
-                  client_address: cliente.direccion || '-',
-
-                  // Totales generales en céntimos (incluyendo IRPF)
-                  subtotal_cents: Math.round(totales.subtotal * 100),
-                  vat_total_cents: Math.round(totales.totalIva * 100),
-                  irpf_total_cents: Math.round(totales.totalIrpf * 100), // NUEVO
-                  total_cents: Math.round(totales.total * 100),
-
-                  lines: conceptos.map(c => {
-                    const cant = c.cantidad || 1;
-                    const prec = c.precio || 0;
-                    const tot = cant * prec;
-
-                    return {
-                      description: c.descripcion || '-',
-                      quantity: cant,
-                      unit_price_cents: Math.round(prec * 100),
-                      total_amount_cents: Math.round(tot * 100)
-                    };
-                  })
-                }} 
-                empresa={{ 
-                  name: "Tu Empresa S.L.",
-                  tax_id: "B12345678",
-                  address: "Calle Principal 123, Madrid"
-                }} 
+            <div>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '0.5rem' }}>NIF / CIF</label>
+              <input 
+                type="text" 
+                value={clientTaxId} 
+                onChange={(e) => setClientTaxId(e.target.value)} 
+                placeholder="Ej. 12345678Z" 
+                className="form-control" 
               />
             </div>
           </div>
+          <div>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '0.5rem' }}>Dirección Fiscal</label>
+            <textarea 
+              value={clientAddress} 
+              onChange={(e) => setClientAddress(e.target.value)} 
+              placeholder="Calle, número, código postal, ciudad..." 
+              className="form-control" 
+              rows={2} 
+            />
+          </div>
+        </div>
 
+        {/* 3. Conceptos de Facturación */}
+        <div style={{ marginBottom: '2rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 'bold', color: '#4b5563', textTransform: 'uppercase', margin: 0 }}>
+              3. Conceptos de Facturación
+            </h3>
+            <button type="button" onClick={addLine} className="btn btn-primary" style={{ fontSize: '12px', padding: '0.4rem 0.8rem', width: 'auto' }}>
+              <i className="fas fa-plus"></i> Añadir Línea
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {lines.map((line, index) => (
+              <div key={index} style={{ display: 'grid', gridTemplateColumns: '3fr 1fr 1fr 1fr 40px', gap: '10px', alignItems: 'center', background: '#f9fafb', padding: '1rem', borderRadius: '0.5rem', border: '1px solid #e5e7eb' }}>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: '2px' }}>Descripción</label>
+                  <input 
+                    type="text" 
+                    value={line.description} 
+                    onChange={(e) => handleLineChange(index, 'description', e.target.value)} 
+                    placeholder="Descripción del concepto" 
+                    className="form-control" 
+                    required 
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: '2px' }}>Cantidad</label>
+                  <input 
+                    type="number" 
+                    step="any"
+                    value={line.quantity} 
+                    onChange={(e) => handleLineChange(index, 'quantity', e.target.value)} 
+                    className="form-control" 
+                    required 
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: '2px' }}>Precio Ud. (€)</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    value={line.unit_price} 
+                    onChange={(e) => handleLineChange(index, 'unit_price', e.target.value)} 
+                    className="form-control" 
+                    required 
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '11px', color: '#6b7280', display: 'block', marginBottom: '2px' }}>IVA (%)</label>
+                  <select 
+                    value={line.vat_rate} 
+                    onChange={(e) => handleLineChange(index, 'vat_rate', e.target.value)} 
+                    className="form-control"
+                  >
+                    <option value="21">21%</option>
+                    <option value="10">10%</option>
+                    <option value="4">4%</option>
+                    <option value="0">0%</option>
+                  </select>
+                </div>
+                <div style={{ textAlign: 'center', paddingTop: '1.2rem' }}>
+                  <button 
+                    type="button" 
+                    onClick={() => removeLine(index)} 
+                    style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '1.1rem' }}
+                    title="Eliminar línea"
+                  >
+                    <i className="fas fa-trash"></i>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 4. Totales Resumen */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '2rem' }}>
+          <div style={{ width: '300px', background: '#f9fafb', padding: '1.25rem', borderRadius: '0.5rem', border: '1px solid #e5e7eb' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px', color: '#4b5563' }}>
+              <span>Base Imponible:</span>
+              <span>{subtotal.toFixed(2)} €</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontSize: '14px', color: '#4b5563' }}>
+              <span>IVA Repercutido:</span>
+              <span>{vatTotal.toFixed(2)} €</span>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid #e5e7eb', paddingTop: '10px', fontSize: '16px', fontWeight: 'bold', color: '#111827' }}>
+              <span>TOTAL:</span>
+              <span>{total.toFixed(2)} €</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Botón de envío final */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+          <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: 'auto', padding: '0.75rem 2rem' }}>
+            {loading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-check"></i>}
+            &nbsp; Emitir y Firmar (Veri*factu)
+          </button>
+        </div>
+      </form>
+
+      {/* MODAL DE VISTA PREVIA */}
+      {showPreview && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          backgroundColor: 'rgba(0, 0, 0, 0.7)',
+          zIndex: 9999,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+          padding: '2rem 1rem',
+          overflowY: 'auto'
+        }}>
+          <div style={{
+            width: '100%',
+            maxWidth: '850px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '1rem',
+            background: '#111827',
+            padding: '1rem 1.5rem',
+            borderRadius: '0.5rem',
+            color: 'white'
+          }}>
+            <span style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>Vista Previa de Factura (Borrador A4)</span>
+            <button 
+              onClick={() => setShowPreview(false)}
+              style={{ background: '#ef4444', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.375rem', cursor: 'pointer', fontWeight: 'bold' }}
+            >
+              Cerrar Vista Previa
+            </button>
+          </div>
+          <div style={{ background: 'white', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)', borderRadius: '0.375rem', overflow: 'hidden' }}>
+            <InvoicePDFTemplate factura={previewFactura} empresa={previewEmpresa} />
+          </div>
         </div>
       )}
     </div>
