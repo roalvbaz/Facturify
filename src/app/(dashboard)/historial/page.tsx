@@ -1,5 +1,5 @@
 import { db } from '@/db';
-import { invoices, invoice_lines, companies, company_members, customers } from '@/db/schema'; // <--- Añadido 'customers'
+import { invoices, invoice_lines, companies, company_members, customers } from '@/db/schema';
 import { eq, desc, and, ilike } from 'drizzle-orm';
 import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
@@ -12,36 +12,35 @@ export default async function HistorialPage({
   searchParams,
 }: {
   searchParams: Promise<{ q?: string; status?: string }>;
-}){
-
+}) {
   const resolvedSearchParams = await searchParams;
 
-  // 1. Identificamos al usuario desde supabase auth
+  // 1. Identificamos al usuario desde Supabase Auth
   const supabase = await createClient();
-  const {data: {user}} = await supabase.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!user){
+  if (!user) {
     redirect('/login');
   }
 
   // 2. Buscamos la empresa asignada al usuario
   const membresia = await db
-  .select({
-    companyId: companies.id,
-    companyName: companies.name,
-    NIF: companies.tax_id,
-    address: companies.address, // <--- Corregido a 'address'
-  })
-  .from(company_members)
-  .innerJoin(companies,eq(company_members.company_id,companies.id))
-  .where(eq(company_members.user_id,user.id))
-  .limit(1);
+    .select({
+      companyId: companies.id,
+      companyName: companies.name,
+      NIF: companies.tax_id,
+      address: companies.address,
+    })
+    .from(company_members)
+    .innerJoin(companies, eq(company_members.company_id, companies.id))
+    .where(eq(company_members.user_id, user.id))
+    .limit(1);
 
   const miEmpresa = membresia[0];
 
-  if(!miEmpresa){
-    return(
-      <div style={{padding: '3rem', textAlign: 'center'}}>
+  if (!miEmpresa) {
+    return (
+      <div style={{ padding: '3rem', textAlign: 'center' }}>
         <h2>Sin empresa asignada</h2>
         <p>Tu usuario no tiene ninguna empresa asociada para ver el historial.</p>
       </div>
@@ -50,55 +49,82 @@ export default async function HistorialPage({
 
   const activeCompanyId = miEmpresa.companyId;
   const busqueda = resolvedSearchParams.q || '';
-  const estadoFiltro = resolvedSearchParams.status ||'Todas';
+  const estadoFiltro = resolvedSearchParams.status || 'Todas';
 
   // 3. Filtramos estrictamente por la empresa activa del usuario
   const conditions = [eq(invoices.company_id, activeCompanyId)];
-  if(busqueda){
+  if (busqueda) {
     conditions.push(ilike(invoices.formatted_number, `%${busqueda}%`));
   }
-  if(estadoFiltro != 'Todas'){
+  if (estadoFiltro !== 'Todas') {
     conditions.push(eq((invoices as any).status, estadoFiltro));
   }
 
-  // NUEVO: Hacemos LEFT JOIN con 'customers' para traernos los datos del cliente
-  const listaFacturasConCliente = await db
+  // Consulta con LEFT JOIN a customers para traer nombre, nif y dirección del cliente real
+  const listaFacturas = await db
     .select({
-      invoice: invoices,
-      clientName: customers.name,
-      clientTaxId: customers.tax_id,
-      clientAddress: customers.address,
+      id: invoices.id,
+      company_id: invoices.company_id,
+      customer_id: invoices.customer_id,
+      series_code: invoices.series_code,
+      year: invoices.year,
+      number: invoices.number,
+      formatted_number: invoices.formatted_number,
+      issued_at: invoices.issued_at,
+      status: (invoices as any).status,
+      subtotal_cents: invoices.subtotal_cents,
+      vat_total_cents: invoices.vat_total_cents,
+      total_cents: invoices.total_cents,
+      qr_code_url: invoices.qr_code_url,
+      current_hash: invoices.current_hash,
+      client_name: customers.name,
+      client_tax_id: customers.tax_id,
+      client_address: customers.address,
+      client_email: customers.email,
     })
     .from(invoices)
     .leftJoin(customers, eq(invoices.customer_id, customers.id))
     .where(and(...conditions))
     .orderBy(desc(invoices.issued_at));
-  
-  // Objeto de empresa con la clave 'address' corregida (con dos 'd')
+
   const empresa = {
     id: miEmpresa.companyId,
     name: miEmpresa.companyName,
     nif: miEmpresa.NIF,
-    address: miEmpresa.address, 
-  }
+    address: miEmpresa.address,
+  };
 
   const todasLasLineas = await db.select().from(invoice_lines);
 
-  // Mapeamos para inyectar los datos del cliente formateados que espera la plantilla
-  const facturasConLineas = listaFacturasConCliente.map(({ invoice, clientName, clientTaxId, clientAddress }) => ({
-    ...invoice,
-    client_name: clientName || 'Cliente General',
-    client_tax_id: clientTaxId || '-',
-    client_address: clientAddress || '-',
-    lines: todasLasLineas.filter(l => l.invoice_id === invoice.id)
+  const facturasConLineas = listaFacturas.map((f) => ({
+    ...f,
+    lines: todasLasLineas.filter((l) => l.invoice_id === f.id),
   }));
 
-  return(
+  // Server Action para alternar el estado
+  async function toggleStatus(formData: FormData) {
+    'use server';
+    const id = formData.get('id') as string;
+    const currentStatus = formData.get('currentStatus') as string;
+    const newStatus = currentStatus === 'Pagada' ? 'Pendiente' : 'Pagada';
+
+    await db
+      .update(invoices)
+      .set({ status: newStatus } as any)
+      .where(eq(invoices.id, id));
+
+    revalidatePath('/historial');
+    revalidatePath('/dashboard');
+
+    return { success: true, newStatus };
+  }
+
+  return (
     <div>
       <div className="header-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h2>Historial de Facturas - {miEmpresa.companyName}</h2>
-          <p>Consulta, busca, filtra, previsualiza y descarga tus facturas en PDF.</p>
+          <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-color)', margin: '0 0 2px 0' }}>Historial de Facturas - {miEmpresa.companyName}</h2>
+          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Consulta, busca, filtra, previsualiza y descarga tus facturas en PDF.</p>
         </div>
         <div>
           <Link href="/nueva-factura" className="btn btn-primary" style={{ textDecoration: 'none', width: 'auto' }}>

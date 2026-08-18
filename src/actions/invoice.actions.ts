@@ -92,6 +92,7 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
     // Extraer datos del cliente del payload recibido
     const clientName = payload.customerData?.nombre || 'Cliente General';
     const clientTaxId = payload.customerData?.nif || '';
+    const clientEmail = payload.customerData?.email || '';
     const clientAddress = payload.customerData?.direccion || '';
     const seriesCode = payload.seriesCode || 'F';
     
@@ -101,11 +102,10 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
       throw new Error("La factura debe contener al menos una línea de concepto.");
     }
 
-    // GESTIÓN INTELIGENTE DE CLIENTES (Anti-duplicados por NIF)
+    // GESTIÓN INTELIGENTE DE CLIENTES (Guarda y actualiza email)
     let finalCustomerId: string | null = null;
 
     if (clientTaxId && clientTaxId.trim() !== '' && clientTaxId !== '-') {
-      // Buscar si ya existe un cliente con este NIF en la misma empresa
       const [existingClient] = await db
         .select()
         .from(customers)
@@ -119,18 +119,23 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
 
       if (existingClient) {
         finalCustomerId = existingClient.id;
-        // Actualizamos nombre o dirección por si han cambiado ligeramente
+        // Actualizamos nombre, dirección y email
         await db.update(customers)
-          .set({ name: clientName, address: clientAddress })
+          .set({ 
+            name: clientName, 
+            address: clientAddress, 
+            email: clientEmail 
+          })
           .where(eq(customers.id, existingClient.id));
       } else {
-        // Creamos el cliente automáticamente en el directorio
+        // Creamos el cliente guardando explícitamente el email
         const [newClient] = await db
           .insert(customers)
           .values({
             company_id: activeCompanyId,
             name: clientName,
             tax_id: clientTaxId,
+            email: clientEmail,
             address: clientAddress,
           })
           .returning({ id: customers.id });
@@ -243,6 +248,7 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
     }
 
     revalidatePath('/historial');
+    revalidatePath('/clientes');
     revalidatePath('/dashboard');
 
     return { success: true, invoiceId: nuevaFactura.id };
@@ -250,5 +256,80 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
   } catch (error: any) {
     console.error("❌ ERROR AL EMITIR FACTURA:", error);
     throw new Error(error?.message || "No se pudo emitir la factura.");
+  }
+}
+
+/**
+ * 3. Acción para OBTENER la empresa activa del usuario autenticado
+ */
+export async function getActiveCompanyAction() {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, company: null };
+    }
+
+    const membresia = await db
+      .select({
+        id: companies.id,
+        name: companies.name,
+        tax_id: companies.tax_id,
+        address: companies.address,
+      })
+      .from(company_members)
+      .innerJoin(companies, eq(company_members.company_id, companies.id))
+      .where(eq(company_members.user_id, user.id))
+      .limit(1);
+
+    return { 
+      success: true, 
+      company: membresia[0] || null 
+    };
+  } catch (error: any) {
+    console.error("❌ ERROR AL OBTENER EMPRESA ACTIVA:", error);
+    return { success: false, company: null };
+  }
+}
+
+/**
+ * 4. Acción para OBTENER el listado de clientes de la empresa activa
+ */
+export async function getCompanyCustomersAction() {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, customers: [] };
+    }
+
+    const [membresia] = await db
+      .select({ companyId: company_members.company_id })
+      .from(company_members)
+      .where(eq(company_members.user_id, user.id))
+      .limit(1);
+
+    if (!membresia) {
+      return { success: false, customers: [] };
+    }
+
+    const clientList = await db
+      .select({
+        id: customers.id,
+        name: customers.name,
+        tax_id: customers.tax_id,
+        email: customers.email,
+        address: customers.address,
+      })
+      .from(customers)
+      .where(eq(customers.company_id, membresia.companyId))
+      .orderBy(customers.name);
+
+    return { success: true, customers: clientList };
+  } catch (error: any) {
+    console.error("❌ ERROR AL OBTENER CLIENTES:", error);
+    return { success: false, customers: [] };
   }
 }

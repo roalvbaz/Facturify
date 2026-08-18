@@ -36,7 +36,7 @@ export const company_members = pgTable(
     company_id: uuid('company_id')
       .references(() => companies.id, { onDelete: 'cascade' })
       .notNull(),
-    user_id: varchar('user_id', { length: 256 }).notNull(),
+    user_id: uuid('user_id').notNull(),
     role: varchar('role', { length: 32 }).notNull().default('MEMBER'), // 'OWNER', 'ADMIN', 'MEMBER'
     created_at: timestamp('created_at').defaultNow().notNull(),
   },
@@ -160,7 +160,7 @@ export const invoice_lines = pgTable('invoice_lines', {
 export const audit_logs = pgTable('audit_logs', {
   id: uuid('id').primaryKey().defaultRandom(),
   company_id: uuid('company_id').references(() => companies.id, { onDelete: 'set null' }),
-  user_id: varchar('user_id', { length: 256 }),
+  user_id: uuid('user_id'),
   event_code: varchar('event_code', { length: 64 }).notNull(),
   description: text('description').notNull(),
   metadata: jsonb('metadata'),

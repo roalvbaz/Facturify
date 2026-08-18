@@ -5,16 +5,22 @@ import { createPortal } from 'react-dom';
 import { descargarFacturaPDF } from '@/lib/pdf/pdf';
 import InvoicePDFTemplate from '@/components/invoicePDFTemplate';
 
-export default function InvoiceModalClient({ factura, empresa }: { factura: any, empresa: any }) {
+export default function InvoiceModalClient({ 
+  factura, 
+  empresa, 
+  variant = 'icon' 
+}: { 
+  factura: any; 
+  empresa: any; 
+  variant?: 'icon' | 'button';
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
 
-  // Asegurarnos de que el document.body está disponible al renderizar
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Bloquear el scroll de la página trasera cuando el visor está abierto
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -35,7 +41,6 @@ export default function InvoiceModalClient({ factura, empresa }: { factura: any,
     alert(`Funcionalidad en camino: Envío de la factura ${factura.formatted_number} por correo electrónico.`);
   };
 
-  // Contenido a pantalla completa inyectado vía Portal
   const modalContent = isOpen ? (
     <div style={{ 
       position: 'fixed', 
@@ -43,13 +48,11 @@ export default function InvoiceModalClient({ factura, empresa }: { factura: any,
       left: 0, 
       right: 0, 
       bottom: 0, 
-      zIndex: 2147483647, // Z-index máximo para aplastar la barra lateral
-      backgroundColor: '#e2e8f0', // Fondo gris claro para aislar el PDF
+      zIndex: 2147483647, 
+      backgroundColor: '#e2e8f0', 
       display: 'flex', 
       flexDirection: 'column' 
     }}>
-      
-      {/* Barra de herramientas superior del Visor */}
       <div style={{ 
         backgroundColor: 'white', 
         padding: '1rem 2rem', 
@@ -74,42 +77,64 @@ export default function InvoiceModalClient({ factura, empresa }: { factura: any,
         </div>
       </div>
       
-      {/* Área del documento PDF (con scroll interno) */}
       <div style={{ 
         flex: 1, 
         overflowY: 'auto', 
         padding: '2rem', 
         display: 'flex', 
         justifyContent: 'center',
-        alignItems: 'flex-start' // Asegura que el A4 empiece desde arriba y no se centre verticalmente
+        alignItems: 'flex-start'
       }}>
         <div style={{ width: '100%', maxWidth: '900px' }}>
           <InvoicePDFTemplate factura={factura} empresa={empresa} />
         </div>
       </div>
-
     </div>
   ) : null;
 
   return (
     <>
-      {/* Botones en la tabla del historial */}
-      <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', alignItems: 'center' }}>
+      {variant === 'button' ? (
+        // Botón completo con texto e icono para Nueva Factura
         <button 
-          onClick={() => setIsOpen(true)} 
-          title="Ver Factura y PDF" 
-          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: '1.1rem' }}
+          type="button" 
+          onClick={() => setIsOpen(true)}
+          className="btn"
+          style={{ 
+            background: 'var(--bg-color)', 
+            color: 'var(--text-color)', 
+            border: '1px solid var(--border-color)', 
+            fontWeight: 600, 
+            fontSize: '0.85rem', 
+            padding: '0.4rem 0.9rem', 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '6px',
+            cursor: 'pointer'
+          }}
         >
-          <i className="fas fa-eye"></i>
+          <i className="fas fa-eye" style={{ color: 'var(--primary)' }}></i>
+          <span>Vista Previa</span>
         </button>
-        {factura.qr_code_url && (
-          <a href={factura.qr_code_url} target="_blank" rel="noopener noreferrer" title="Ver Código QR Veri*factu" style={{ color: 'var(--text-muted)', fontSize: '1.1rem', display: 'inline-flex', alignItems: 'center' }}>
-            <i className="fas fa-qrcode"></i>
-          </a>
-        )}
-      </div>
+      ) : (
+        // Formato original de la tabla de historial (solo el ojo y QR)
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', alignItems: 'center' }}>
+          <button 
+            type="button"
+            onClick={() => setIsOpen(true)} 
+            title="Ver Factura y PDF" 
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--primary)', fontSize: '1.1rem' }}
+          >
+            <i className="fas fa-eye"></i>
+          </button>
+          {factura.qr_code_url && (
+            <a href={factura.qr_code_url} target="_blank" rel="noopener noreferrer" title="Ver Código QR Veri*factu" style={{ color: 'var(--text-muted)', fontSize: '1.1rem', display: 'inline-flex', alignItems: 'center' }}>
+              <i className="fas fa-qrcode"></i>
+            </a>
+          )}
+        </div>
+      )}
 
-      {/* Inyección del visor directamente en la raíz de la página */}
       {mounted && createPortal(modalContent, document.body)}
     </>
   );

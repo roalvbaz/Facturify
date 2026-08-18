@@ -1,15 +1,57 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { emitInvoiceAction } from '@/actions/invoice.actions';
+import { emitInvoiceAction, getActiveCompanyAction, getCompanyCustomersAction } from '@/actions/invoice.actions';
 import { showToast } from '@/lib/utils/toast';
-import InvoicePDFTemplate from '@/components/invoicePDFTemplate';
+import InvoiceModalClient from '@/components/invoiceModalClient';
 
 export default function NuevaFacturaPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
+
+  // Estado para la empresa real
+  const [empresa, setEmpresa] = useState<{ id?: string; name: string; nif: string; address: string }>({
+    name: 'Cargando empresa...',
+    nif: '',
+    address: '',
+  });
+
+  // Estado para el directorio de clientes
+  const [customerList, setCustomerList] = useState<Array<{
+    id: string;
+    name: string;
+    tax_id: string;
+    email: string | null;
+    address: string | null;
+  }>>([]);
+
+  useEffect(() => {
+    async function loadData() {
+      try {
+        const [compRes, custRes] = await Promise.all([
+          getActiveCompanyAction(),
+          getCompanyCustomersAction(),
+        ]);
+
+        if (compRes?.company) {
+          setEmpresa({
+            id: compRes.company.id,
+            name: compRes.company.name,
+            nif: compRes.company.tax_id || '',
+            address: compRes.company.address || '',
+          });
+        }
+
+        if (custRes?.customers) {
+          setCustomerList(custRes.customers);
+        }
+      } catch (err) {
+        console.error('Error al cargar datos iniciales:', err);
+      }
+    }
+    loadData();
+  }, []);
 
   // Estados del formulario
   const [seriesCode, setSeriesCode] = useState('F');
@@ -29,6 +71,16 @@ export default function NuevaFacturaPage() {
   const [lines, setLines] = useState([
     { description: '', quantity: 1, unit_price: 0, vat_rate: 21 }
   ]);
+
+  const handleSelectCustomer = (customerId: string) => {
+    const selected = customerList.find((c) => c.id === customerId);
+    if (selected) {
+      setClientName(selected.name || '');
+      setClientTaxId(selected.tax_id || '');
+      setClientEmail(selected.email || '');
+      setClientAddress(selected.address || '');
+    }
+  };
 
   const handleLineChange = (index: number, field: string, value: any) => {
     const newLines = [...lines];
@@ -55,8 +107,8 @@ export default function NuevaFacturaPage() {
   const irpfTotal = subtotal * (parseFloat(String(irpfRate)) / 100);
   const total = subtotal + vatTotal - irpfTotal;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setLoading(true);
 
     try {
@@ -82,7 +134,7 @@ export default function NuevaFacturaPage() {
     }
   };
 
-  // Objeto simulado para la vista previa en el modal A4
+  // Objeto de factura en vivo
   const previewFactura = {
     id: 'preview-id',
     formatted_number: `${seriesCode}-2026-0001`,
@@ -90,103 +142,111 @@ export default function NuevaFacturaPage() {
     client_name: clientName || 'Cliente General',
     client_tax_id: clientTaxId || '-',
     client_address: clientAddress || '-',
-    lines: lines.map(l => ({
-      description: l.description || 'Concepto sin descripción',
-      quantity: l.quantity,
-      unit_price_cents: Math.round((parseFloat(String(l.unit_price)) || 0) * 100),
-      total_amount_cents: Math.round(((parseFloat(String(l.quantity)) || 0) * (parseFloat(String(l.unit_price)) || 0) * (1 + (parseFloat(String(l.vat_rate)) || globalVat) / 100)) * 100),
-    })),
+    lines: lines.map((l) => {
+      const qty = parseFloat(String(l.quantity)) || 0;
+      const unitPrice = parseFloat(String(l.unit_price)) || 0;
+      const vatRate = parseFloat(String(l.vat_rate)) || globalVat;
+      const lineSub = qty * unitPrice;
+      const lineTotal = lineSub * (1 + vatRate / 100);
+      return {
+        description: l.description || 'Concepto sin descripción',
+        quantity: l.quantity,
+        unit_price_cents: Math.round(unitPrice * 100),
+        total_amount_cents: Math.round(lineTotal * 100),
+      };
+    }),
     subtotal_cents: Math.round(subtotal * 100),
     vat_total_cents: Math.round(vatTotal * 100),
     irpf_total_cents: Math.round(irpfTotal * 100),
     total_cents: Math.round(total * 100),
-    qr_code_url: 'https://www.agenciatributaria.es/qr?demo=true',
-    invoice_hash: 'DEMO_HASH_VERIFACTU_PREVIEW',
-  };
-
-  const previewEmpresa = {
-    name: 'Mi Empresa S.L.',
-    tax_id: 'A12345678',
-    address: 'Plazaola Kalea 25, Donostia',
+    qr_code_url: '',
+    invoice_hash: '',
   };
 
   return (
-    <div style={{ maxWidth: '1300px', margin: '0 auto', paddingBottom: '4rem' }}>
+    <div style={{ maxWidth: '1300px', margin: '0 auto', paddingBottom: '2rem' }}>
       
       {/* CABECERA SUPERIOR */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-color)', margin: '0 0 4px 0' }}>Crear Factura</h2>
-          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.9rem' }}>Emite una nueva factura verificable (Veri*factu).</p>
+          <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-color)', margin: '0 0 2px 0' }}>Crear Factura</h2>
+          <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>Emite una nueva factura verificable (Veri*factu).</p>
         </div>
-        <div style={{ display: 'flex', gap: '10px' }}>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          
+          <InvoiceModalClient factura={previewFactura} empresa={empresa} variant="button" />
+
           <button 
             type="button" 
-            className="btn" 
-            style={{ background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)', fontWeight: 600 }}
-            onClick={() => setShowPreview(true)}
-          >
-            <i className="fas fa-eye"></i> Vista Previa
-          </button>
-          <button 
-            type="button" 
-            onClick={handleSubmit}
+            onClick={() => handleSubmit()}
             disabled={loading}
             className="btn btn-primary"
-            style={{ fontWeight: 600 }}
+            style={{ fontWeight: 600, fontSize: '0.85rem', padding: '0.4rem 0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}
           >
             {loading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-check"></i>}
-            &nbsp; Guardar Factura
+            <span>Guardar Factura</span>
           </button>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         
         {/* BLOQUE 1: DATOS DE FACTURA / FECHAS */}
-        <div className="card" style={{ padding: '1.5rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.5rem' }}>
+        <div className="card" style={{ padding: '1rem 1.25rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Nº Factura</label>
+              <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.3rem' }}>Nº Factura</label>
               <input 
                 type="text" 
                 value="Automático (al emitir)" 
                 disabled 
                 className="form-control" 
-                style={{ backgroundColor: 'var(--bg-color)', opacity: 0.8, cursor: 'not-allowed' }} 
+                style={{ backgroundColor: 'var(--bg-color)', opacity: 0.8, cursor: 'not-allowed', height: '36px', fontSize: '0.85rem' }} 
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Fecha Emisión</label>
+              <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.3rem' }}>Fecha Emisión</label>
               <input 
                 type="date" 
                 value={issuedDate} 
                 onChange={(e) => setIssuedDate(e.target.value)} 
                 className="form-control" 
+                style={{ height: '36px', fontSize: '0.85rem' }}
                 required 
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.5rem' }}>Fecha Vencimiento</label>
+              <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.3rem' }}>Fecha Vencimiento</label>
               <input 
                 type="date" 
                 value={dueDate} 
                 onChange={(e) => setDueDate(e.target.value)} 
                 className="form-control" 
+                style={{ height: '36px', fontSize: '0.85rem' }}
               />
             </div>
           </div>
         </div>
 
         {/* BLOQUE 2: DATOS DEL CLIENTE */}
-        <div className="card" style={{ padding: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-color)', margin: 0 }}>Datos del Cliente</h3>
-            <select className="form-control" style={{ width: '220px', fontSize: '0.85rem' }} defaultValue="">
+        <div className="card" style={{ padding: '1rem 1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-color)', margin: 0 }}>Datos del Cliente</h3>
+            <select 
+              className="form-control" 
+              style={{ width: '220px', height: '32px', fontSize: '0.8rem', padding: '0 8px' }} 
+              defaultValue=""
+              onChange={(e) => handleSelectCustomer(e.target.value)}
+            >
               <option value="" disabled>-- Cargar de mi directorio --</option>
+              {customerList.map((cust) => (
+                <option key={cust.id} value={cust.id}>
+                  {cust.name} {cust.tax_id ? `(${cust.tax_id})` : ''}
+                </option>
+              ))}
             </select>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.75rem' }}>
             <div>
               <input 
                 type="text" 
@@ -194,6 +254,7 @@ export default function NuevaFacturaPage() {
                 onChange={(e) => setClientName(e.target.value)} 
                 placeholder="Nombre / Razón Social" 
                 className="form-control" 
+                style={{ height: '36px', fontSize: '0.85rem' }}
               />
             </div>
             <div>
@@ -203,6 +264,7 @@ export default function NuevaFacturaPage() {
                 onChange={(e) => setClientTaxId(e.target.value)} 
                 placeholder="NIF / CIF" 
                 className="form-control" 
+                style={{ height: '36px', fontSize: '0.85rem' }}
               />
             </div>
             <div>
@@ -212,6 +274,7 @@ export default function NuevaFacturaPage() {
                 onChange={(e) => setClientEmail(e.target.value)} 
                 placeholder="Correo Electrónico" 
                 className="form-control" 
+                style={{ height: '36px', fontSize: '0.85rem' }}
               />
             </div>
             <div>
@@ -221,28 +284,29 @@ export default function NuevaFacturaPage() {
                 onChange={(e) => setClientAddress(e.target.value)} 
                 placeholder="Dirección Fiscal" 
                 className="form-control" 
+                style={{ height: '36px', fontSize: '0.85rem' }}
               />
             </div>
           </div>
         </div>
 
         {/* BLOQUE 3: CONCEPTOS */}
-        <div className="card" style={{ padding: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-color)', margin: 0 }}>Conceptos</h3>
-            <button type="button" className="btn" style={{ fontSize: '0.85rem', background: 'var(--bg-color)', border: '1px solid var(--border-color)', padding: '0.4rem 0.8rem' }}>
-              + Insertar del Catálogo <i className="fas fa-chevron-down" style={{ fontSize: '0.7rem', marginLeft: '4px' }}></i>
+        <div className="card" style={{ padding: '1rem 1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-color)', margin: 0 }}>Conceptos</h3>
+            <button type="button" className="btn" style={{ fontSize: '0.8rem', background: 'var(--bg-color)', border: '1px solid var(--border-color)', padding: '0.3rem 0.6rem' }}>
+              + Insertar del Catálogo <i className="fas fa-chevron-down" style={{ fontSize: '0.6rem', marginLeft: '4px' }}></i>
             </button>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '0.75rem' }}>
             {lines.map((line, index) => {
               const lineSubtotal = (parseFloat(String(line.quantity)) || 0) * (parseFloat(String(line.unit_price)) || 0);
               const lineVatAmount = lineSubtotal * ((parseFloat(String(line.vat_rate)) || globalVat) / 100);
               const lineTotal = lineSubtotal + lineVatAmount;
 
               return (
-                <div key={index} style={{ display: 'grid', gridTemplateColumns: '4fr 1fr 1.2fr 1.5fr 1fr 40px', gap: '10px', alignItems: 'center', background: 'var(--bg-color)', padding: '0.6rem 0.75rem', borderRadius: '0.375rem', border: '1px solid var(--border-color)' }}>
+                <div key={index} style={{ display: 'grid', gridTemplateColumns: '4fr 1fr 1.2fr 1.5fr 1fr 30px', gap: '8px', alignItems: 'center', background: 'var(--bg-color)', padding: '0.4rem 0.6rem', borderRadius: '0.375rem', border: '1px solid var(--border-color)' }}>
                   <div>
                     <input 
                       type="text" 
@@ -250,6 +314,7 @@ export default function NuevaFacturaPage() {
                       onChange={(e) => handleLineChange(index, 'description', e.target.value)} 
                       placeholder="Descripción del producto/servicio" 
                       className="form-control" 
+                      style={{ height: '34px', fontSize: '0.85rem' }}
                       required 
                     />
                   </div>
@@ -260,6 +325,7 @@ export default function NuevaFacturaPage() {
                       value={line.quantity} 
                       onChange={(e) => handleLineChange(index, 'quantity', e.target.value)} 
                       className="form-control" 
+                      style={{ height: '34px', fontSize: '0.85rem' }}
                       required 
                     />
                   </div>
@@ -271,6 +337,7 @@ export default function NuevaFacturaPage() {
                       onChange={(e) => handleLineChange(index, 'unit_price', e.target.value)} 
                       placeholder="Precio" 
                       className="form-control" 
+                      style={{ height: '34px', fontSize: '0.85rem' }}
                       required 
                     />
                   </div>
@@ -279,6 +346,7 @@ export default function NuevaFacturaPage() {
                       value={line.vat_rate} 
                       onChange={(e) => handleLineChange(index, 'vat_rate', e.target.value)} 
                       className="form-control"
+                      style={{ height: '34px', fontSize: '0.8rem', padding: '0 4px' }}
                     >
                       <option value="21">General (21%)</option>
                       <option value="10">Reducido (10%)</option>
@@ -286,14 +354,14 @@ export default function NuevaFacturaPage() {
                       <option value="0">Exento (0%)</option>
                     </select>
                   </div>
-                  <div style={{ textAlign: 'right', fontWeight: 700, fontSize: '0.9rem', paddingRight: '8px', color: 'var(--text-color)' }}>
+                  <div style={{ textAlign: 'right', fontWeight: 700, fontSize: '0.85rem', paddingRight: '4px', color: 'var(--text-color)' }}>
                     {lineTotal.toFixed(2)} €
                   </div>
                   <div style={{ textAlign: 'center' }}>
                     <button 
                       type="button" 
                       onClick={() => removeLine(index)} 
-                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '1.1rem' }}
+                      style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '1rem' }}
                       title="Eliminar línea"
                     >
                       <i className="fas fa-trash"></i>
@@ -308,54 +376,54 @@ export default function NuevaFacturaPage() {
             type="button" 
             onClick={addLine} 
             className="btn" 
-            style={{ background: 'var(--bg-color)', border: '1px dashed var(--border-color)', color: 'var(--text-color)', fontWeight: 600, fontSize: '0.85rem' }}
+            style={{ background: 'var(--bg-color)', border: '1px dashed var(--border-color)', color: 'var(--text-color)', fontWeight: 600, fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
           >
             + Añadir Línea Libre
           </button>
         </div>
 
         {/* BLOQUE 4: IMPUESTOS Y TOTALES (INFERIOR) */}
-        <div className="card" style={{ padding: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '2rem' }}>
+        <div className="card" style={{ padding: '1rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.5rem' }}>
           
-          <div style={{ display: 'flex', gap: '1.5rem' }}>
+          <div style={{ display: 'flex', gap: '1rem' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.4rem' }}>IVA GENERAL (%)</label>
+              <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.3rem' }}>IVA GENERAL (%)</label>
               <input 
                 type="number" 
                 value={globalVat} 
                 onChange={(e) => setGlobalVat(Number(e.target.value))} 
                 className="form-control" 
-                style={{ width: '90px', textAlign: 'center' }} 
+                style={{ width: '80px', textAlign: 'center', height: '36px', fontSize: '0.85rem' }} 
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.4rem' }}>RETENCIÓN IRPF (%)</label>
+              <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.3rem' }}>RETENCIÓN IRPF (%)</label>
               <input 
                 type="number" 
                 value={irpfRate} 
                 onChange={(e) => setIrpfRate(Number(e.target.value))} 
                 className="form-control" 
-                style={{ width: '90px', textAlign: 'center' }} 
+                style={{ width: '80px', textAlign: 'center', height: '36px', fontSize: '0.85rem' }} 
               />
             </div>
           </div>
 
-          <div style={{ width: '300px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+          <div style={{ width: '280px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               <span>Base Imponible:</span>
               <span style={{ fontWeight: 600, color: 'var(--text-color)' }}>{subtotal.toFixed(2)} €</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               <span>IVA Repercutido:</span>
               <span style={{ fontWeight: 600, color: 'var(--text-color)' }}>+{vatTotal.toFixed(2)} €</span>
             </div>
             {irpfTotal > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: '#ef4444' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#ef4444' }}>
                 <span>Retención IRPF:</span>
                 <span style={{ fontWeight: 600 }}>-{irpfTotal.toFixed(2)} €</span>
               </div>
             )}
-            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid var(--border-color)', paddingTop: '10px', fontSize: '1.2rem', fontWeight: 900, color: 'var(--text-color)', marginTop: '4px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid var(--border-color)', paddingTop: '6px', fontSize: '1.1rem', fontWeight: 900, color: 'var(--text-color)', marginTop: '2px' }}>
               <span>Total Final:</span>
               <span>{total.toFixed(2)} €</span>
             </div>
@@ -364,49 +432,6 @@ export default function NuevaFacturaPage() {
         </div>
 
       </form>
-
-      {/* MODAL DE VISTA PREVIA A4 */}
-      {showPreview && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          backgroundColor: 'rgba(0, 0, 0, 0.75)',
-          zIndex: 9999,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'flex-start',
-          padding: '2rem 1rem',
-          overflowY: 'auto'
-        }}>
-          <div style={{
-            width: '100%',
-            maxWidth: '850px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginBottom: '1rem',
-            background: '#111827',
-            padding: '1rem 1.5rem',
-            borderRadius: '0.5rem',
-            color: 'white'
-          }}>
-            <span style={{ fontWeight: 'bold', fontSize: '1rem' }}>Vista Previa de Factura (Borrador A4)</span>
-            <button 
-              onClick={() => setShowPreview(false)}
-              style={{ background: '#ef4444', color: 'white', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.375rem', cursor: 'pointer', fontWeight: 'bold' }}
-            >
-              Cerrar
-            </button>
-          </div>
-          <div style={{ background: 'white', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)', borderRadius: '0.375rem', overflow: 'hidden' }}>
-            <InvoicePDFTemplate factura={previewFactura} empresa={previewEmpresa} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
