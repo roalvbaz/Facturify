@@ -1,22 +1,51 @@
 'use client';
 
 import { useState } from 'react';
+import { showToast } from '@/lib/utils/toast';
+import { toggleInvoiceStatusAction } from '@/actions/invoice.actions';
 
-export default function InvoiceStatusButton({ invoiceId, initialStatus, onToggle }: { invoiceId: string, initialStatus: string, onToggle: (id: string, newStatus: string) => Promise<void> }) {
+export default function InvoiceStatusButton({ 
+  invoiceId, 
+  initialStatus, 
+}: { 
+  invoiceId: string; 
+  initialStatus: string; 
+}) {
   const [status, setStatus] = useState(initialStatus);
   const [loading, setLoading] = useState(false);
 
-  const esPagada = status === 'Pagada';
+  // 1. Normalizamos el estado actual
+  const currentLower = (status || '').toLowerCase().trim();
+  const isPaid = currentLower === 'pagada' || currentLower === 'paid' || currentLower.includes('pagad');
+
+  // 2. Definimos los estilos y textos de forma explícita (adiós a ternarias confusas)
+  let backgroundColor = '#fef3c7'; // Amarillo por defecto (Pendiente / Draft)
+  let textColor = '#92400e';
+  let labelText = 'Pendiente';
+
+  if (isPaid) {
+    backgroundColor = '#d1fae5'; // Verde esmeralda si está pagada
+    textColor = '#065f46';
+    labelText = 'Pagada';
+  } else if (currentLower === 'draft') {
+    labelText = 'Draft';
+  }
 
   const handleClick = async () => {
-    const nuevoEstado = esPagada ? 'Pendiente' : 'Pagada';
     setLoading(true);
+
     try {
-      await onToggle(invoiceId, nuevoEstado);
-      setStatus(nuevoEstado);
+      await showToast.promise(toggleInvoiceStatusAction(invoiceId, status), {
+        loading: 'Actualizando estado de la factura...',
+        success: (result: any) => {
+          // Actualizamos el estado localmente con lo que devuelve el servidor
+          setStatus(result.newStatus);
+          return `Estado actualizado con éxito`;
+        },
+        error: (err: any) => `No se pudo actualizar: ${err.message || 'Error desconocido'}`
+      });
     } catch (e) {
       console.error(e);
-      alert('Error al actualizar el estado');
     } finally {
       setLoading(false);
     }
@@ -25,19 +54,26 @@ export default function InvoiceStatusButton({ invoiceId, initialStatus, onToggle
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
       <span style={{ 
-        padding: '0.25rem 0.5rem', borderRadius: '0.375rem', fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', 
-        backgroundColor: esPagada ? '#d1fae5' : '#fef3c7', color: esPagada ? '#047857' : '#b45309'
+        padding: '0.4rem 0.75rem', 
+        borderRadius: '0.375rem', 
+        fontSize: '0.7rem', 
+        fontWeight: 800, 
+        textTransform: 'uppercase', 
+        letterSpacing: '0.05em',
+        backgroundColor: backgroundColor, 
+        color: textColor,
+        display: 'inline-block'
       }}>
-        {status}
+        {labelText}
       </span>
       <button 
         type="button"
         disabled={loading}
         onClick={handleClick}
-        title={esPagada ? "Marcar como Pendiente" : "Marcar como Pagada"} 
-        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: esPagada ? 'var(--warning)' : 'var(--success)', fontSize: '1rem' }}
+        title={isPaid ? "Marcar como Pendiente" : "Marcar como Pagada"} 
+        style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: isPaid ? '#d97706' : '#059669', fontSize: '1.1rem' }}
       >
-        <i className={`fas ${loading ? 'fa-spinner fa-spin' : (esPagada ? 'fa-undo' : 'fa-check-circle')}`}></i>
+        <i className={`fas ${loading ? 'fa-spinner fa-spin' : (isPaid ? 'fa-undo' : 'fa-check-circle')}`}></i>
       </button>
     </div>
   );

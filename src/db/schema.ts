@@ -62,6 +62,8 @@ export const customers = pgTable('customers', {
   postal_code: varchar('postal_code', { length: 16 }),
   city: text('city'),
   created_at: timestamp('created_at').defaultNow().notNull(),
+  telephone: text('telephone'),
+  email: text('email'),
 });
 
 // ==========================================
@@ -107,7 +109,7 @@ export const invoices = pgTable(
     formatted_number: varchar('formatted_number', { length: 64 }).notNull(), // Ej: "F-2026-0001"
     issued_at: timestamp('issued_at').defaultNow().notNull(),
     due_date:timestamp(''),
-    status: varchar('status', { length: 32 }).default('draft').notNull(),
+    status: varchar('status', { length: 32 }).default('Pendiente').notNull(),
 
     // Campos de encadenamiento e integridad Veri*factu
     prev_hash: text('prev_hash'),
@@ -164,4 +166,19 @@ export const audit_logs = pgTable('audit_logs', {
   metadata: jsonb('metadata'),
   ip_address: varchar('ip_address', { length: 64 }),
   timestamp: timestamp('timestamp').defaultNow().notNull(),
+});
+// ==========================================
+// 8. CATALOGO DE PRODUCTOS / SERVICIOS 
+// ==========================================
+export const products = pgTable('products', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  company_id: uuid('company_id')
+    .references(() => companies.id, { onDelete: 'cascade' })
+    .notNull(),
+  name: varchar('name', { length: 255 }).notNull(),
+  description: text('description'),
+  price_cents: integer('price_cents').notNull().default(0), // Guardamos en céntimos
+  default_vat: integer('default_vat').notNull().default(21), // IVA defect para el product
+  created_at: timestamp('created_at').defaultNow().notNull(),
+  updated_at: timestamp('updated_at').defaultNow().notNull(),
 });

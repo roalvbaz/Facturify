@@ -1,198 +1,254 @@
 'use server';
 
-import { eq, and } from 'drizzle-orm';
-import { db } from '@/db/index';
-import {
-  companies,
-  company_members, // <-- ¡Importamos tu tabla de seguridad!
-  invoice_series,
-  invoices,
-  invoice_lines,
-  audit_logs,
-} from '@/db/schema';
-import { buildCanonicalString } from '@/lib/verifactu/canonical';
-import { generateInvoiceHash } from '@/lib/verifactu/crypto';
-import { construirUrlQr } from '@/lib/verifactu/qr';
-import { EmitInvoiceSchema } from '@/lib/validations/invoice';
-import { createClient } from '@/lib/supabase/server'; // <-- Importamos Supabase
+import { db } from '@/db';
+import { invoices, invoice_lines, companies, company_members, customers } from '@/db/schema';
+import { eq, and, desc } from 'drizzle-orm';
+import { revalidatePath } from 'next/cache';
+import { createClient } from '@/lib/supabase/server';
+import crypto from 'crypto';
 
-export async function emitInvoiceAction(inputData: unknown) {
+// Función auxiliar para construir la URL del QR de Veri*factu
+function construirUrlQr({ emisorNif, numeroFactura, totalCentimos, fechaExpedicion }: {
+  emisorNif: string;
+  numeroFactura: string;
+  totalCentimos: number;
+  fechaExpedicion: Date;
+}) {
+  const fechaStr = fechaExpedicion.toISOString().split('T')[0].replace(/-/g, '');
+  const totalEur = (totalCentimos / 100).toFixed(2);
+  return `https://www.agenciatributaria.es/qr?nif=${emisorNif}&num=${numeroFactura}&fecha=${fechaStr}&importe=${totalEur}`;
+}
+
+/**
+ * 1. Acción para CAMBIAR el estado de una factura de forma segura
+ */
+export async function toggleInvoiceStatusAction(id: string, currentStatus: string) {
   try {
-    console.log("--> ENTRADA REAL RECIBIDA:", JSON.stringify(inputData, null, 2));
+    const normalizedStatus = (currentStatus || '').toLowerCase().trim();
+    const isPaid = normalizedStatus === 'pagada' || normalizedStatus === 'paid' || normalizedStatus.includes('pagad');
+    const newStatus = isPaid ? 'Pendiente' : 'Pagada';
 
-    // A. IDENTIFICACIÓN SEGURA DEL USUARIO (Nuevo Escudo)
+    await db
+      .update(invoices)
+      .set({ status: newStatus } as any)
+      .where(eq(invoices.id, id));
+
+    revalidatePath('/historial');
+    revalidatePath('/dashboard');
+
+    return { success: true, newStatus };
+  } catch (error: any) {
+    console.error("❌ ERROR CRÍTICO EN toggleInvoiceStatusAction:", error);
+    throw new Error(error?.message || "Error desconocido en base de datos al cambiar el estado.");
+  }
+}
+
+interface EmitInvoicePayload {
+  seriesCode?: string;
+  customerData?: {
+    nombre?: string;
+    nif?: string;
+    email?: string;
+    direccion?: string;
+  };
+  lines: Array<{
+    description: string;
+    quantity: number | string;
+    unit_price: number | string;
+    vat_rate?: number | string;
+  }>;
+}
+
+/**
+ * 2. Acción para EMITIR una nueva factura recibiendo un objeto tipado
+ */
+export async function emitInvoiceAction(payload: EmitInvoicePayload) {
+  try {
     const supabase = await createClient();
     const { data: { user } } = await supabase.auth.getUser();
-    
+
     if (!user) {
-      throw new Error("No autorizado. Debes iniciar sesión.");
+      throw new Error("No autorizado");
     }
 
-    const membresia = await db
-      .select({ companyId: company_members.company_id })
+    // Obtener la empresa del usuario autenticado
+    const [membresia] = await db
+      .select({
+        companyId: companies.id,
+        taxId: companies.tax_id,
+      })
       .from(company_members)
+      .innerJoin(companies, eq(company_members.company_id, companies.id))
       .where(eq(company_members.user_id, user.id))
       .limit(1);
 
-    const activeCompanyId = membresia[0]?.companyId;
-
-    if (!activeCompanyId) {
-      throw new Error("Tu usuario no tiene ninguna empresa asignada para emitir facturas.");
+    if (!membresia) {
+      throw new Error("El usuario no tiene ninguna empresa asociada.");
     }
 
-    // B. Validamos la entrada con Zod
-    const parseResult = EmitInvoiceSchema.safeParse(inputData);
-    if (!parseResult.success) {
-      throw new Error(`Datos inválidos: ${JSON.stringify(parseResult.error.format(), null, 2)}`);
-    }
+    const activeCompanyId = membresia.companyId;
+    const issuerTaxId = membresia.taxId || "A00000000";
+
+    // Extraer datos del cliente del payload recibido
+    const clientName = payload.customerData?.nombre || 'Cliente General';
+    const clientTaxId = payload.customerData?.nif || '';
+    const clientAddress = payload.customerData?.direccion || '';
+    const seriesCode = payload.seriesCode || 'F';
     
-    const data = parseResult.data;
-    const currentYear = new Date().getFullYear();
+    const lines = payload.lines || [];
 
-    // C. ABRIMOS LA TRANSACCIÓN
-    return await db.transaction(async (tx) => {
-      
-      // 1. Rescatamos y bloqueamos la serie usando el ID REAL (activeCompanyId)
-      let [currentSeries] = await tx
+    if (!lines || lines.length === 0) {
+      throw new Error("La factura debe contener al menos una línea de concepto.");
+    }
+
+    // GESTIÓN INTELIGENTE DE CLIENTES (Anti-duplicados por NIF)
+    let finalCustomerId: string | null = null;
+
+    if (clientTaxId && clientTaxId.trim() !== '' && clientTaxId !== '-') {
+      // Buscar si ya existe un cliente con este NIF en la misma empresa
+      const [existingClient] = await db
         .select()
-        .from(invoice_series)
+        .from(customers)
         .where(
           and(
-            eq(invoice_series.company_id, activeCompanyId), // <-- Usamos activeCompanyId
-            eq(invoice_series.series_code, data.seriesCode),
-            eq(invoice_series.year, currentYear)
+            eq(customers.company_id, activeCompanyId),
+            eq(customers.tax_id, clientTaxId)
           )
         )
-        .for('update');
-
-      if (!currentSeries) {
-        [currentSeries] = await tx
-          .insert(invoice_series)
-          .values({
-            company_id: activeCompanyId, // <-- Usamos activeCompanyId
-            series_code: data.seriesCode,
-            year: currentYear,
-            last_number: 0,
-            last_hash: "",
-          })
-          .returning();
-      }
-
-      // 2. Numeración y encadenamiento
-      const newNumber = currentSeries.last_number + 1;
-      const paddedNumber = newNumber.toString().padStart(4, '0');
-      const formattedInvoiceNumber = `${currentSeries.series_code}-${currentYear}-${paddedNumber}`;
-      const prevHash = currentSeries.last_hash ?? "";
-
-      // 3. Aritmética de totales
-      let acumulado_subtotal_centimos = 0;
-      let acumulado_iva_centimos = 0;
-      const lineas_procesadas = [];
-
-      for (const linea of data.lines) {
-        const base_linea_centimos = linea.quantity * linea.unitPriceCents;
-        const iva_linea_centimos = Math.round((base_linea_centimos * linea.vatPercent) / 100);
-        const total_linea_centimos = base_linea_centimos + iva_linea_centimos;
-
-        acumulado_subtotal_centimos += base_linea_centimos;
-        acumulado_iva_centimos += iva_linea_centimos;
-
-        lineas_procesadas.push({
-          description: linea.description,
-          quantity: linea.quantity,
-          unitPriceCents: linea.unitPriceCents,
-          vatPercent: linea.vatPercent,
-          baseCents: base_linea_centimos,
-          vatCents: iva_linea_centimos,
-          totalCents: total_linea_centimos,
-        });
-      }
-
-      const total_factura_centimos = acumulado_subtotal_centimos + acumulado_iva_centimos;
-        
-      // 4. Core Criptográfico
-      const [issuer] = await tx
-        .select()
-        .from(companies)
-        .where(eq(companies.id, activeCompanyId)) // <-- Usamos activeCompanyId
         .limit(1);
 
-      if (!issuer) {
-        throw new Error("La empresa emisora no existe en la base de datos.");
+      if (existingClient) {
+        finalCustomerId = existingClient.id;
+        // Actualizamos nombre o dirección por si han cambiado ligeramente
+        await db.update(customers)
+          .set({ name: clientName, address: clientAddress })
+          .where(eq(customers.id, existingClient.id));
+      } else {
+        // Creamos el cliente automáticamente en el directorio
+        const [newClient] = await db
+          .insert(customers)
+          .values({
+            company_id: activeCompanyId,
+            name: clientName,
+            tax_id: clientTaxId,
+            address: clientAddress,
+          })
+          .returning({ id: customers.id });
+
+        finalCustomerId = newClient.id;
       }
+    }
 
-      const issuedAt = new Date().toISOString().split('T')[0];
+    // Numeración secuencial por empresa, serie y año
+    const currentYear = new Date().getFullYear();
+    const [lastInvoice] = await db
+      .select({ number: invoices.number })
+      .from(invoices)
+      .where(
+        and(
+          eq(invoices.company_id, activeCompanyId),
+          eq(invoices.series_code, seriesCode),
+          eq(invoices.year, currentYear)
+        )
+      )
+      .orderBy(desc(invoices.number))
+      .limit(1);
 
-      const canonicalString = buildCanonicalString({
-        taxId: issuer.tax_id,
-        formattedNumber: formattedInvoiceNumber,
-        issueDate: issuedAt,
-        totalCents: total_factura_centimos,
-        prevHash: prevHash,
-      });
+    const nextNumber = lastInvoice ? lastInvoice.number + 1 : 1;
+    const formattedInvoiceNumber = `${seriesCode}-${currentYear}-${String(nextNumber).padStart(4, '0')}`;
 
-      const currentHash = await generateInvoiceHash(canonicalString);
+    // Cálculo de importes en céntimos
+    let subtotalCents = 0;
+    let vatTotalCents = 0;
 
-      const qrUrl = construirUrlQr({
-        emisorNif: issuer.tax_id,
-        numeroFactura: formattedInvoiceNumber,
-        totalCentimos: total_factura_centimos,
-        fechaExpedicion: issuedAt,
-      });  
-    
-      // 5. Persistencia atómica
-      const [nuevaFactura] = await tx.insert(invoices).values({
-          company_id: activeCompanyId, // <-- Usamos activeCompanyId
-          customer_id: data.customerId ?? null,
-          series_code: data.seriesCode,
-          year: currentYear,
-          number: newNumber,
-          formatted_number: formattedInvoiceNumber,
-          subtotal_cents: acumulado_subtotal_centimos,
-          vat_total_cents: acumulado_iva_centimos,
-          total_cents: total_factura_centimos,
-          prev_hash: prevHash,
-          current_hash: currentHash,
-          qr_code_url: qrUrl,
-          issued_at: new Date(),
-          // due_date: new Date(data.dueDate), // ¡Descomenta esto cuando añadas la columna!
-      })
-      .returning();
+    const formattedLines = lines.map((l: any) => {
+      const qty = parseFloat(l.quantity) || 1;
+      const unitPriceCents = Math.round((parseFloat(l.unit_price) || 0) * 100);
+      const lineSubtotal = Math.round(qty * unitPriceCents);
+      const vatRate = parseFloat(l.vat_rate) || 21;
+      const lineVat = Math.round(lineSubtotal * (vatRate / 100));
+      const lineTotal = lineSubtotal + lineVat;
 
-      await tx.insert(invoice_lines).values(
-        lineas_procesadas.map((linea, idx) => ({
-          invoice_id: nuevaFactura.id,
-          line_index: idx,
-          description: linea.description,
-          quantity: linea.quantity.toString(),
-          unit_price_cents: linea.unitPriceCents,
-          vat_percent: linea.vatPercent.toString(),
-          vat_amount_cents: linea.vatCents,
-          total_amount_cents: linea.totalCents,
-          created_at: new Date(),
-        }))
-      );
+      subtotalCents += lineSubtotal;
+      vatTotalCents += lineVat;
 
-      await tx
-        .update(invoice_series)
-        .set({
-          last_number: newNumber,
-          last_hash: currentHash,
-          created_at: new Date(),
-        })
-        .where(eq(invoice_series.id, currentSeries.id));
-      
-      await tx.insert(audit_logs).values({
-        event_code: "EMIT_INVOICE",
-        description: `Factura ${formattedInvoiceNumber} emitida con éxito.`,
-        timestamp: new Date(),
-      });
-    
-      return { success: true, invoice: nuevaFactura, qrUrl };
+      return {
+        description: l.description,
+        quantity: qty.toString(),
+        unit_price_cents: unitPriceCents,
+        vat_percent: vatRate.toString(),
+        total_amount_cents: lineTotal,
+      };
     });
 
-    } catch (err: any) {
-    console.error("❌ ERROR CRÍTICO EN SERVER ACTION:", err);
-    throw new Error(err?.message || JSON.stringify(err, Object.getOwnPropertyNames(err)));
+    const totalCents = subtotalCents + vatTotalCents;
+    const issuedAt = new Date();
+
+    // Veri*factu: Obtener el hash anterior para el encadenamiento
+    const [previousInvoice] = await db
+      .select({ current_hash: invoices.current_hash })
+      .from(invoices)
+      .where(eq(invoices.company_id, activeCompanyId))
+      .orderBy(desc(invoices.created_at))
+      .limit(1);
+
+    const prevHash = previousInvoice?.current_hash || 'PREVIOUS_HASH_GENESIS';
+
+    // Generar cadena canónica y hash SHA-256
+    const canonicalString = `${issuerTaxId}|${formattedInvoiceNumber}|${issuedAt.toISOString()}|${totalCents}|${prevHash}`;
+    const currentHash = crypto.createHash('sha256').update(canonicalString).digest('hex');
+
+    // Generar URL para el QR
+    const qrUrl = construirUrlQr({
+      emisorNif: issuerTaxId,
+      numeroFactura: formattedInvoiceNumber,
+      totalCentimos: totalCents,
+      fechaExpedicion: issuedAt,
+    });
+
+    // Insertar factura
+    const [nuevaFactura] = await db
+      .insert(invoices)
+      .values({
+        company_id: activeCompanyId,
+        customer_id: finalCustomerId,
+        series_code: seriesCode,
+        year: currentYear,
+        number: nextNumber,
+        formatted_number: formattedInvoiceNumber,
+        issued_at: issuedAt,
+        status: 'Pendiente',
+        prev_hash: prevHash,
+        current_hash: currentHash,
+        canonical_string: canonicalString,
+        qr_code_url: qrUrl,
+        subtotal_cents: subtotalCents,
+        vat_total_cents: vatTotalCents,
+        total_cents: totalCents,
+        currency: 'EUR',
+        is_locked: true,
+      })
+      .returning({ id: invoices.id });
+
+    // Insertar líneas de detalle
+    for (const line of formattedLines) {
+      await db.insert(invoice_lines).values({
+        invoice_id: nuevaFactura.id,
+        description: line.description,
+        quantity: line.quantity,
+        unit_price_cents: line.unit_price_cents,
+        vat_percent: line.vat_percent,
+        total_amount_cents: line.total_amount_cents,
+      });
     }
+
+    revalidatePath('/historial');
+    revalidatePath('/dashboard');
+
+    return { success: true, invoiceId: nuevaFactura.id };
+
+  } catch (error: any) {
+    console.error("❌ ERROR AL EMITIR FACTURA:", error);
+    throw new Error(error?.message || "No se pudo emitir la factura.");
+  }
 }

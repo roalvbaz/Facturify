@@ -69,7 +69,7 @@ export default function InvoicePDFTemplate({ factura, empresa }: { factura: any,
               factura.lines.map((l: any, idx: number) => (
                 <tr key={idx} style={{ borderBottom: '1px solid #E5E7EB' }}>
                   <td style={{ padding: '12px 10px', fontSize: '14px', color: '#111827' }}>{l.description}</td>
-                  <td style={{ padding: '12px 10px', textAlign: 'center', fontSize: '14px', color: '#4B5563' }}>{l.quantity}</td>
+                  <td style={{ padding: '12px 10px', textAlign: 'center', fontSize: '14px', color: '#4B5563' }}>{parseFloat(l.quantity)}</td>
                   <td style={{ padding: '12px 10px', textAlign: 'right', fontSize: '14px', color: '#4B5563' }}>{((l.unit_price_cents || 0) / 100).toFixed(2)} €</td>
                   <td style={{ padding: '12px 10px', textAlign: 'right', fontSize: '14px', fontWeight: 'bold', color: '#111827' }}>{((l.total_amount_cents || 0) / 100).toFixed(2)} €</td>
                 </tr>
@@ -92,9 +92,16 @@ export default function InvoicePDFTemplate({ factura, empresa }: { factura: any,
               <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 'bold', color: '#111827' }}>{((factura.subtotal_cents || 0) / 100).toFixed(2)} €</td>
             </tr>
             <tr>
-              <td style={{ padding: '8px 10px', textAlign: 'right', color: '#4B5563', borderBottom: '2px solid #E5E7EB' }}>IVA (21%):</td>
-              <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 'bold', color: '#111827', borderBottom: '2px solid #E5E7EB' }}>{((factura.vat_total_cents || 0) / 100).toFixed(2)} €</td>
+              <td style={{ padding: '8px 10px', textAlign: 'right', color: '#4B5563' }}>IVA Repercutido:</td>
+              <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 'bold', color: '#111827' }}>{((factura.vat_total_cents || 0) / 100).toFixed(2)} €</td>
             </tr>
+            {/* NUEVO: Línea de Retención IRPF condicional */}
+            {factura.irpf_total_cents && factura.irpf_total_cents > 0 ? (
+              <tr>
+                <td style={{ padding: '8px 10px', textAlign: 'right', color: '#4B5563', borderBottom: '2px solid #E5E7EB' }}>Retención IRPF:</td>
+                <td style={{ padding: '8px 10px', textAlign: 'right', fontWeight: 'bold', color: '#EF4444', borderBottom: '2px solid #E5E7EB' }}>-{((factura.irpf_total_cents || 0) / 100).toFixed(2)} €</td>
+              </tr>
+            ) : null}
             <tr>
               <td style={{ padding: '12px 10px', textAlign: 'right', fontSize: '16px', fontWeight: 'bold', color: '#111827' }}>TOTAL:</td>
               <td style={{ padding: '12px 10px', textAlign: 'right', fontSize: '18px', fontWeight: 900, color: '#111827' }}>{((factura.total_cents || 0) / 100).toFixed(2)} €</td>
@@ -103,16 +110,38 @@ export default function InvoicePDFTemplate({ factura, empresa }: { factura: any,
         </table>
       </div>
 
-      {/* 5. PIE DE PÁGINA: Avisos legales y QR (Opcional) */}
-      <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: '15px', fontSize: '11px', color: '#6B7280', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-        <div style={{ width: '70%' }}>
-          <p style={{ margin: '0 0 4px 0', fontWeight: 'bold', color: '#374151' }}>Normativa Veri*factu y Ley Antifraude:</p>
-          <p style={{ margin: 0, lineHeight: 1.4 }}>
-            Factura generada conforme al Reglamento que regula los requisitos de los sistemas informáticos de facturación.
-          </p>
+      {/* 5. PIE DE PÁGINA: Normativa Veri*factu y Código QR */}
+        <div style={{ borderTop: '1px solid #E5E7EB', paddingTop: '15px', fontSize: '11px', color: '#6B7280', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' }}>
+          <div style={{ width: '65%' }}>
+            <p style={{ margin: '0 0 4px 0', fontWeight: 'bold', color: '#374151' }}>
+              {factura.qr_code_url ? 'Factura Verificada (Veri*factu)' : 'Borrador - Factura Verificable (Veri*factu)'}
+            </p>
+            <p style={{ margin: 0, lineHeight: 1.4 }}>
+              Emitido al amparo del Reglamento que regula los requisitos de los sistemas informáticos de facturación (Real Decreto 1007/2023). Sistema Veri*factu.
+            </p>
+            {factura.invoice_hash && (
+              <p style={{ margin: '4px 0 0 0', fontFamily: 'monospace', fontSize: '9px', color: '#9CA3AF' }}>
+                Hash: {factura.invoice_hash}
+              </p>
+            )}
+          </div>
+          
+          {/* Contenedor del Código QR corregido */}
+          <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            {factura.qr_code_url ? (
+              <img 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(factura.qr_code_url)}`} 
+                alt="Código QR Veri*factu" 
+                style={{ width: '75px', height: '75px', border: '1px solid #E5E7EB', padding: '3px', backgroundColor: 'white' }} 
+              />
+            ) : (
+              <div style={{ width: '75px', height: '75px', border: '2px dashed #CBD5E1', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', color: '#9CA3AF', textAlign: 'center', backgroundColor: '#F9FAFB' }}>
+                QR Veri*factu (Al emitir)
+              </div>
+            )}
+            <span style={{ fontSize: '8px', color: '#9CA3AF', marginTop: '3px' }}>Escanea para verificar</span>
+          </div>
         </div>
-      </div>
-
     </div>
   );
 }

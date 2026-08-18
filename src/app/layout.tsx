@@ -1,4 +1,9 @@
 import './globals.css';
+import { Toaster } from "@/components/ui/sonner";
+import { Inter } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata = {
   title: 'Facturify',
@@ -11,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="es">
+    <html lang="es" className={cn("font-sans", inter.variable)}>
       <head>
         <link 
           rel="stylesheet" 
@@ -24,6 +29,7 @@ export default function RootLayout({
       {/* Reseteamos márgenes para evitar desplazamientos y quitamos las clases antiguas */}
       <body style={{ margin: 0, padding: 0, minHeight: '100vh' }}>
         {children}
+        <Toaster richColors position="top-right" />
       </body>
     </html>
   );

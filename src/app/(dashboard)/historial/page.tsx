@@ -1,11 +1,12 @@
 import { db } from '@/db';
-import { invoices, invoice_lines, companies, company_members } from '@/db/schema';
+import { invoices, invoice_lines, companies, company_members, customers } from '@/db/schema'; // <--- Añadido 'customers'
 import { eq, desc, and, ilike } from 'drizzle-orm';
 import Link from 'next/link';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import InvoiceModalClient from '@/components/invoiceModalClient';
+import InvoiceStatusButton from '@/components/invoiceStatusButton';
 
 export default async function HistorialPage({
   searchParams,
@@ -15,12 +16,10 @@ export default async function HistorialPage({
 
   const resolvedSearchParams = await searchParams;
 
-
   // 1. Identificamos al usuario desde supabase auth
   const supabase = await createClient();
   const {data: {user}} = await supabase.auth.getUser();
 
-  // Si no esta registrado en auth lo redirigimos a login
   if (!user){
     redirect('/login');
   }
@@ -30,6 +29,8 @@ export default async function HistorialPage({
   .select({
     companyId: companies.id,
     companyName: companies.name,
+    NIF: companies.tax_id,
+    address: companies.address, // <--- Corregido a 'address'
   })
   .from(company_members)
   .innerJoin(companies,eq(company_members.company_id,companies.id))
@@ -43,7 +44,7 @@ export default async function HistorialPage({
       <div style={{padding: '3rem', textAlign: 'center'}}>
         <h2>Sin empresa asignada</h2>
         <p>Tu usuario no tiene ninguna empresa asociada para ver el historial.</p>
-        </div>
+      </div>
     );
   }
 
@@ -52,46 +53,45 @@ export default async function HistorialPage({
   const estadoFiltro = resolvedSearchParams.status ||'Todas';
 
   // 3. Filtramos estrictamente por la empresa activa del usuario
-  const conditions = [eq(invoices.company_id,activeCompanyId)];
+  const conditions = [eq(invoices.company_id, activeCompanyId)];
   if(busqueda){
-    conditions.push(ilike(invoices.formatted_number,`%${busqueda}%`));
+    conditions.push(ilike(invoices.formatted_number, `%${busqueda}%`));
   }
   if(estadoFiltro != 'Todas'){
-    conditions.push(eq((invoices as any).status,estadoFiltro));
+    conditions.push(eq((invoices as any).status, estadoFiltro));
   }
 
-  const listaFacturas = await db
-    .select()
+  // NUEVO: Hacemos LEFT JOIN con 'customers' para traernos los datos del cliente
+  const listaFacturasConCliente = await db
+    .select({
+      invoice: invoices,
+      clientName: customers.name,
+      clientTaxId: customers.tax_id,
+      clientAddress: customers.address,
+    })
     .from(invoices)
+    .leftJoin(customers, eq(invoices.customer_id, customers.id))
     .where(and(...conditions))
     .orderBy(desc(invoices.issued_at));
   
+  // Objeto de empresa con la clave 'address' corregida (con dos 'd')
   const empresa = {
     id: miEmpresa.companyId,
     name: miEmpresa.companyName,
+    nif: miEmpresa.NIF,
+    address: miEmpresa.address, 
   }
 
   const todasLasLineas = await db.select().from(invoice_lines);
 
-  const facturasConLineas = listaFacturas.map( f =>({
-    ...f,
-    lines: todasLasLineas.filter(l=> l.invoice_id === f.id)
+  // Mapeamos para inyectar los datos del cliente formateados que espera la plantilla
+  const facturasConLineas = listaFacturasConCliente.map(({ invoice, clientName, clientTaxId, clientAddress }) => ({
+    ...invoice,
+    client_name: clientName || 'Cliente General',
+    client_tax_id: clientTaxId || '-',
+    client_address: clientAddress || '-',
+    lines: todasLasLineas.filter(l => l.invoice_id === invoice.id)
   }));
-
-  async function toggleStatus(formData: FormData){
-    'use server';
-    const id = formData.get('id') as string;
-    const currentStatus = formData.get('currentStatus') as string;
-    const newStatus = currentStatus === 'Pagada' ? 'Pendiente' : 'Pagada';
-
-    await db
-    .update(invoices)
-    .set({status: newStatus} as any)
-    .where(eq(invoices.id, id));
-
-    revalidatePath('/historial');
-    revalidatePath('/dashboard');
-  }
 
   return(
     <div>
@@ -168,7 +168,6 @@ export default async function HistorialPage({
               <tbody>
                 {facturasConLineas.map((f) => {
                   const estado = (f as any).status || 'Pendiente';
-                  const esPagada = estado === 'Pagada';
                   const fecha = f.issued_at ? new Date(f.issued_at).toLocaleDateString('es-ES') : '-';
                   const base = ((f.subtotal_cents || 0) / 100).toFixed(2);
                   const iva = ((f.vat_total_cents || 0) / 100).toFixed(2);
@@ -183,23 +182,10 @@ export default async function HistorialPage({
                       <td style={{ textAlign: 'right', fontWeight: 900 }}>{total} €</td>
                       <td style={{ textAlign: 'center' }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                          <span style={{ 
-                            padding: '0.25rem 0.5rem', borderRadius: '0.375rem', fontSize: '0.625rem', fontWeight: 700, textTransform: 'uppercase', 
-                            backgroundColor: esPagada ? '#d1fae5' : '#fef3c7', color: esPagada ? '#047857' : '#b45309'
-                          }}>
-                            {estado}
-                          </span>
-                          <form action={toggleStatus}>
-                            <input type="hidden" name="id" value={f.id} />
-                            <input type="hidden" name="currentStatus" value={estado} />
-                            <button 
-                              type="submit"
-                              title={esPagada ? "Marcar como Pendiente" : "Marcar como Pagada"} 
-                              style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: esPagada ? 'var(--warning)' : 'var(--success)', fontSize: '1rem' }}
-                            >
-                              <i className={`fas ${esPagada ? 'fa-undo' : 'fa-check-circle'}`}></i>
-                            </button>
-                          </form>
+                          <InvoiceStatusButton 
+                            invoiceId={f.id} 
+                            initialStatus={estado}  
+                          />
                         </div>
                       </td>
                       <td style={{ textAlign: 'center' }}>
