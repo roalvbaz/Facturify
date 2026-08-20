@@ -1,15 +1,19 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import crypto from 'crypto';
 
 export async function middleware(request: NextRequest) {
-  // 1. Inicializamos la respuesta base
+  // 1. Inicializamos la respuesta base y añadimos protección CSRF
   let response = NextResponse.next({
     request: {
       headers: request.headers,
     },
   });
 
-  // 2. Creamos el cliente de Supabase adaptado al Edge de Cloudflare/Next.js
+  const csrfNonce = crypto.randomUUID();
+  response.headers.set('X-CSRF-Token', csrfNonce);
+
+  // 2. Creamos el cliente de Supabase adaptado al Edge
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -43,16 +47,17 @@ export async function middleware(request: NextRequest) {
 
   // 4. Lógica de protección de rutas
   if (!session && !isLoginPage) {
-    // Si no tiene sesión real, a la calle (login)
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
   if (session && isLoginPage) {
-    // Si ya está logueado y va al login, lo metemos al dashboard
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 
-  // Si todo es correcto, dejamos que la petición continúe
+  // 5. Blindaje extra: Ocultar información del servidor al exterior
+  response.headers.delete('X-Powered-By');
+  response.headers.delete('Server');
+
   return response;
 }
 
