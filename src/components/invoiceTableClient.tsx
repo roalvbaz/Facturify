@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import InvoiceModalClient from '@/components/invoiceModalClient';
 import InvoiceStatusButton from '@/components/invoiceStatusButton';
+import { sendPaymentReminderAction } from '@/actions/reminder.actions';
+import { showToast } from '@/lib/utils/toast';
 
 interface ColumnConfig {
   id: string;
@@ -29,6 +31,7 @@ export default function InvoicesTableClient({
 }) {
   const [visibleColumns, setVisibleColumns] = useState<{ [key: string]: boolean }>({});
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [loadingReminderId, setLoadingReminderId] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem('facturify_invoice_columns');
@@ -54,6 +57,27 @@ export default function InvoicesTableClient({
   };
 
   const isColVisible = (id: string) => visibleColumns[id] !== false;
+
+  const handleSendReminder = async (invoiceId: string, invoiceNumber: string, clientEmail?: string) => {
+    if (!clientEmail || !clientEmail.trim()) {
+      showToast.error('El cliente no tiene un correo electrónico asociado.');
+      return;
+    }
+
+    setLoadingReminderId(invoiceId);
+    try {
+      const res = await sendPaymentReminderAction(invoiceId);
+      if (res.success) {
+        showToast.success(`Recordatorio de pago enviado para ${invoiceNumber}`);
+      } else {
+        showToast.error(res.error || 'No se pudo enviar el recordatorio');
+      }
+    } catch (err: any) {
+      showToast.error(err.message || 'Error al procesar el recordatorio');
+    } finally {
+      setLoadingReminderId(null);
+    }
+  };
 
   return (
     <div style={{ position: 'relative' }}>
@@ -162,11 +186,13 @@ export default function InvoicesTableClient({
           <tbody>
             {facturas.map((f) => {
               const estado = f.status || 'Pendiente';
+              const isPendiente = estado.toLowerCase().includes('pendiente');
               const fechaEmision = f.issued_at ? new Date(f.issued_at).toLocaleDateString('es-ES') : '-';
               const fechaVencimiento = f.due_date ? new Date(f.due_date).toLocaleDateString('es-ES') : '-';
               const base = ((f.subtotal_cents || 0) / 100).toFixed(2);
               const iva = ((f.vat_total_cents || 0) / 100).toFixed(2);
               const total = ((f.total_cents || 0) / 100).toFixed(2);
+              const isReminderLoading = loadingReminderId === f.id;
 
               return (
                 <tr key={f.id}>
@@ -238,7 +264,32 @@ export default function InvoicesTableClient({
                   </td>
 
                   <td style={{ textAlign: 'center' }}>
-                    <InvoiceModalClient factura={f} empresa={empresa} settings={settings} />
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                      {isPendiente && (
+                        <button
+                          type="button"
+                          onClick={() => handleSendReminder(f.id, f.formatted_number, f.client_email)}
+                          disabled={isReminderLoading}
+                          title="Enviar correo de recordatorio de vencimiento al cliente"
+                          style={{
+                            background: '#fef3c7',
+                            border: '1px solid #fde68a',
+                            color: '#b45309',
+                            cursor: isReminderLoading ? 'not-allowed' : 'pointer',
+                            fontSize: '0.85rem',
+                            padding: '6px 8px',
+                            borderRadius: '6px',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <i className={`fas ${isReminderLoading ? 'fa-spinner fa-spin' : 'fa-bell'}`}></i>
+                        </button>
+                      )}
+
+                      <InvoiceModalClient factura={f} empresa={empresa} settings={settings} />
+                    </div>
                   </td>
                 </tr>
               );

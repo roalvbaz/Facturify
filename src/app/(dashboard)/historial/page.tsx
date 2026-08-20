@@ -1,6 +1,6 @@
 import { db } from '@/db';
 import { invoices, invoice_lines, companies, company_members, customers, company_settings } from '@/db/schema';
-import { eq, desc, and, ilike, gte, lte } from 'drizzle-orm';
+import { eq, desc, and, ilike, gte, lte, or } from 'drizzle-orm';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
@@ -62,10 +62,18 @@ export default async function HistorialPage({
   const conditions = [eq(invoices.company_id, activeCompanyId)];
 
   if (busqueda.trim()) {
-    conditions.push(ilike(invoices.formatted_number, `%${busqueda.trim()}%`));
+    const term = `%${busqueda.trim()}%`;
+    conditions.push(
+      or(
+        ilike(invoices.formatted_number, term),
+        ilike(customers.name, term),
+        ilike(customers.tax_id, term)
+      )!
+    );
   }
+
   if (estadoFiltro !== 'Todas') {
-    conditions.push(eq((invoices as any).status, estadoFiltro));
+    conditions.push(eq(invoices.status as any, estadoFiltro));
   }
   if (serieFiltro !== 'Todas') {
     conditions.push(eq(invoices.series_code, serieFiltro));
@@ -90,11 +98,11 @@ export default async function HistorialPage({
       number: invoices.number,
       formatted_number: invoices.formatted_number,
       issued_at: invoices.issued_at,
-      due_date: (invoices as any).due_date,
-      status: (invoices as any).status,
-      rectifies_invoice_id: (invoices as any).rectifies_invoice_id,
-      rectification_type: (invoices as any).rectification_type,
-      rectification_reason: (invoices as any).rectification_reason,
+      due_date: invoices.due_date as any,
+      status: invoices.status as any,
+      rectifies_invoice_id: invoices.rectifies_invoice_id as any,
+      rectification_type: invoices.rectification_type as any,
+      rectification_reason: invoices.rectification_reason as any,
       subtotal_cents: invoices.subtotal_cents,
       vat_total_cents: invoices.vat_total_cents,
       total_cents: invoices.total_cents,
@@ -126,7 +134,6 @@ export default async function HistorialPage({
     lines: todasLasLineas.filter((l) => l.invoice_id === f.id),
   }));
 
-  // URL de exportación con parámetros activos
   const exportParams = new URLSearchParams();
   if (busqueda) exportParams.set('q', busqueda);
   if (estadoFiltro !== 'Todas') exportParams.set('status', estadoFiltro);
@@ -143,7 +150,7 @@ export default async function HistorialPage({
             Historial de Facturas - {miEmpresa.companyName}
           </h2>
           <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            Consulta, busca, filtra y exporta tus facturas ordinarias y rectificativas.
+            Consulta, busca por referencia o cliente, filtra y exporta tus facturas ordinarias y rectificativas.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -165,7 +172,7 @@ export default async function HistorialPage({
             }}
           >
             <i className="fas fa-file-excel"></i>
-            <span>Exportar Excel</span>
+            <span>Exportar CSV/Excel</span>
           </a>
 
           <Link href="/nueva-factura" className="btn btn-primary" style={{ textDecoration: 'none', width: 'auto', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
@@ -175,19 +182,19 @@ export default async function HistorialPage({
         </div>
       </div>
 
-      {/* FILTROS CON SELECTOR DE TIPO / SERIE */}
+      {/* FILTROS */}
       <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
         <form method="GET" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem', alignItems: 'end' }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
-              Referencia
+              Buscar Factura o Cliente
             </label>
             <input 
               type="text" 
               name="q" 
               defaultValue={busqueda} 
               className="form-control" 
-              placeholder="Ej: F-2026 / R-2026..." 
+              placeholder="Nº Factura, Cliente o NIF..." 
               style={{ height: '45px', fontSize: '0.85rem' }} 
             />
           </div>

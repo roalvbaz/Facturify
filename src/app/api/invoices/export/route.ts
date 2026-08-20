@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
 import { invoices, company_members, customers } from "@/db/schema";
-import { eq, and, ilike, gte, lte, desc } from "drizzle-orm";
+import { eq, and, ilike, gte, lte, desc, or } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   try {
@@ -26,16 +26,27 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const busqueda = searchParams.get("q") || "";
     const estado = searchParams.get("status") || "Todas";
+    const serie = searchParams.get("series") || "Todas";
     const fechaDesde = searchParams.get("from") || "";
     const fechaHasta = searchParams.get("to") || "";
 
     const conditions = [eq(invoices.company_id, member.company_id)];
 
     if (busqueda.trim()) {
-      conditions.push(ilike(invoices.formatted_number, `%${busqueda.trim()}%`));
+      const term = `%${busqueda.trim()}%`;
+      conditions.push(
+        or(
+          ilike(invoices.formatted_number, term),
+          ilike(customers.name, term),
+          ilike(customers.tax_id, term)
+        )!
+      );
     }
     if (estado !== "Todas") {
-      conditions.push(eq((invoices as any).status, estado));
+      conditions.push(eq(invoices.status as any, estado));
+    }
+    if (serie !== "Todas") {
+      conditions.push(eq(invoices.series_code, serie));
     }
     if (fechaDesde) {
       conditions.push(gte(invoices.issued_at, new Date(`${fechaDesde}T00:00:00`)));
@@ -47,9 +58,10 @@ export async function GET(request: NextRequest) {
     const facturas = await db
       .select({
         formatted_number: invoices.formatted_number,
+        series_code: invoices.series_code,
         issued_at: invoices.issued_at,
-        due_date: (invoices as any).due_date,
-        status: (invoices as any).status,
+        due_date: invoices.due_date as any,
+        status: invoices.status as any,
         subtotal_cents: invoices.subtotal_cents,
         vat_total_cents: invoices.vat_total_cents,
         total_cents: invoices.total_cents,
@@ -62,9 +74,10 @@ export async function GET(request: NextRequest) {
       .where(and(...conditions))
       .orderBy(desc(invoices.issued_at));
 
-    // Cabecera CSV en formato Libro Registro de Facturas Expedidas
+    // Cabecera CSV en formato Libro Registro Oficial de Facturas Expedidas
     const headers = [
       "Numero Factura",
+      "Serie",
       "Fecha Emision",
       "Fecha Vencimiento",
       "Cliente",
@@ -85,6 +98,7 @@ export async function GET(request: NextRequest) {
 
       return [
         `"${f.formatted_number || ""}"`,
+        `"${f.series_code || "F"}"`,
         `"${fechaEmision}"`,
         `"${fechaVencimiento}"`,
         `"${(f.client_name || "").replace(/"/g, '""')}"`,
@@ -97,9 +111,7 @@ export async function GET(request: NextRequest) {
       ].join(";");
     });
 
-    // UTF-8 BOM para que Excel en Windows y Mac reconozca tildes y caracteres especiales
     const csvContent = "\uFEFF" + [headers.join(";"), ...rows].join("\r\n");
-
     const filename = `Libro_Facturas_${new Date().toISOString().split("T")[0]}.csv`;
 
     return new NextResponse(csvContent, {
