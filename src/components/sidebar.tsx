@@ -93,6 +93,10 @@ export default function Sidebar({
         <Link href="/productos" style={linkStyle(isActive('/productos'))}>
           <i className="fas fa-box" style={{ width: '20px', textAlign: 'center' }}></i> Productos
         </Link>
+        <Link href="/gastos" style={linkStyle(isActive('/gastos'))}>
+          <i className="fas fa-receipt" style={{ width: '20px', textAlign: 'center' }}></i> 
+          Gastos
+        </Link>
       </nav>
 
       {/* 3. Pie del Sidebar */}

@@ -116,7 +116,7 @@ export const invoices = pgTable(
     rectifies_invoice_id: uuid('rectifies_invoice_id')
       .references((): any => invoices.id, { onDelete: 'set null' }),
     rectification_type: varchar('rectification_type', { length: 32 }), // 'DIFERENCIAS' | 'SUSTITUCION'
-    rectification_reason: text('rectification_reason'), // Ej: 'R1 - Error fundado en derecho' o 'R4 - Devolución de mercancías'
+    rectification_reason: text('rectification_reason'), // Ej: 'R1 - Error fundado en derecho'
 
     // Campos de encadenamiento e integridad Veri*factu
     prev_hash: text('prev_hash'),
@@ -124,14 +124,14 @@ export const invoices = pgTable(
     canonical_string: text('canonical_string'),
     qr_code_url: text('qr_code_url'),
 
-    // Importes normalizados en céntimos (admiten valores negativos para abonos)
+    // Importes en céntimos
     subtotal_cents: integer('subtotal_cents').default(0).notNull(),
     vat_total_cents: integer('vat_total_cents').default(0).notNull(),
     total_cents: integer('total_cents').default(0).notNull(),
     currency: varchar('currency', { length: 8 }).default('EUR').notNull(),
 
     created_at: timestamp('created_at').defaultNow().notNull(),
-    is_locked: boolean('is_locked').default(true).notNull(), // Bloqueo fiscal de factura
+    is_locked: boolean('is_locked').default(true).notNull(),
   },
   (table) => ({
     invoiceNumberIdx: uniqueIndex('invoice_company_series_number_idx').on(
@@ -162,7 +162,71 @@ export const invoice_lines = pgTable('invoice_lines', {
 });
 
 // ==========================================
-// 7. REGISTRO DE AUDITORÍA (AUDIT_LOGS)
+// 7. GASTOS Y COMPRAS (EXPENSES)
+// ==========================================
+export const expenses = pgTable('expenses', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  company_id: uuid('company_id')
+    .references(() => companies.id, { onDelete: 'cascade' })
+    .notNull(),
+  supplier_name: text('supplier_name').notNull(),
+  supplier_tax_id: varchar('supplier_tax_id', { length: 64 }),
+  invoice_reference: varchar('invoice_reference', { length: 64 }), // Nº de factura del proveedor o ticket
+  expense_date: timestamp('expense_date').defaultNow().notNull(),
+  category: varchar('category', { length: 64 }).default('General').notNull(), // 'Suministros', 'Software', 'Alquiler', 'Dietas', etc.
+  description: text('description'),
+  
+  // Importes
+  subtotal_cents: integer('subtotal_cents').default(0).notNull(),
+  vat_percent: numeric('vat_percent', { precision: 5, scale: 2 }).default('21').notNull(),
+  vat_amount_cents: integer('vat_amount_cents').default(0).notNull(),
+  irpf_percent: numeric('irpf_percent', { precision: 5, scale: 2 }).default('0').notNull(),
+  irpf_amount_cents: integer('irpf_amount_cents').default(0).notNull(),
+  total_cents: integer('total_cents').default(0).notNull(),
+  
+  payment_method: varchar('payment_method', { length: 32 }).default('TRANSFERENCIA'),
+  status: varchar('status', { length: 32 }).default('Pagado').notNull(), // 'Pagado' | 'Pendiente'
+  receipt_url: text('receipt_url'), // Enlace al PDF/Foto del ticket subido a Supabase Storage
+  created_at: timestamp('created_at').defaultNow().notNull(),
+});
+
+// ==========================================
+// 8. PRESUPUESTOS (ESTIMATES)
+// ==========================================
+export const estimates = pgTable('estimates', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  company_id: uuid('company_id')
+    .references(() => companies.id, { onDelete: 'cascade' })
+    .notNull(),
+  customer_id: uuid('customer_id')
+    .references(() => customers.id, { onDelete: 'set null' }),
+  formatted_number: varchar('formatted_number', { length: 64 }).notNull(), // Ej: "P-2026-0001"
+  issued_at: timestamp('issued_at').defaultNow().notNull(),
+  expiry_date: timestamp('expiry_date'),
+  status: varchar('status', { length: 32 }).default('Borrador').notNull(), // 'Borrador' | 'Enviado' | 'Aceptado' | 'Rechazado' | 'Facturado'
+  converted_invoice_id: uuid('converted_invoice_id')
+    .references(() => invoices.id, { onDelete: 'set null' }), // Enlace a la factura generada tras aprobar
+  subtotal_cents: integer('subtotal_cents').default(0).notNull(),
+  vat_total_cents: integer('vat_total_cents').default(0).notNull(),
+  total_cents: integer('total_cents').default(0).notNull(),
+  notes: text('notes'),
+  created_at: timestamp('created_at').defaultNow().notNull(),
+});
+
+export const estimate_lines = pgTable('estimate_lines', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  estimate_id: uuid('estimate_id')
+    .references(() => estimates.id, { onDelete: 'cascade' })
+    .notNull(),
+  description: text('description'),
+  quantity: numeric('quantity', { precision: 20, scale: 6 }).default('1').notNull(),
+  unit_price_cents: integer('unit_price_cents').default(0).notNull(),
+  vat_percent: numeric('vat_percent', { precision: 5, scale: 2 }).notNull(),
+  total_amount_cents: integer('total_amount_cents').default(0).notNull(),
+});
+
+// ==========================================
+// 9. REGISTRO DE AUDITORÍA (AUDIT_LOGS)
 // ==========================================
 export const audit_logs = pgTable('audit_logs', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -174,8 +238,9 @@ export const audit_logs = pgTable('audit_logs', {
   ip_address: varchar('ip_address', { length: 64 }),
   timestamp: timestamp('timestamp').defaultNow().notNull(),
 });
+
 // ==========================================
-// 8. CATALOGO DE PRODUCTOS / SERVICIOS 
+// 10. CATALOGO DE PRODUCTOS / SERVICIOS
 // ==========================================
 export const products = pgTable('products', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -184,12 +249,15 @@ export const products = pgTable('products', {
     .notNull(),
   name: varchar('name', { length: 255 }).notNull(),
   description: text('description'),
-  price_cents: integer('price_cents').notNull().default(0), // Guardamos en céntimos
-  default_vat: integer('default_vat').notNull().default(21), // IVA defect para el product
+  price_cents: integer('price_cents').notNull().default(0),
+  default_vat: integer('default_vat').notNull().default(21),
   created_at: timestamp('created_at').defaultNow().notNull(),
   updated_at: timestamp('updated_at').defaultNow().notNull(),
 });
 
+// ==========================================
+// 11. CONFIGURACIÓN VISUAL EMPRESA
+// ==========================================
 export const company_settings = pgTable("company_settings", {
   id: uuid("id").primaryKey().defaultRandom(),
   company_id: uuid("company_id")
@@ -204,7 +272,11 @@ export const company_settings = pgTable("company_settings", {
     .notNull(),
 });
 
+// Types inferidos
 export type CompanySettings = typeof company_settings.$inferSelect;
-
 export type Product = typeof products.$inferSelect;
 export type NewProduct = typeof products.$inferInsert;
+export type Expense = typeof expenses.$inferSelect;
+export type NewExpense = typeof expenses.$inferInsert;
+export type Estimate = typeof estimates.$inferSelect;
+export type NewEstimate = typeof estimates.$inferInsert;

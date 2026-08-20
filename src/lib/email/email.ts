@@ -1,14 +1,3 @@
-import nodemailer from 'nodemailer';
-import type { SendMailOptions } from 'nodemailer';
-
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER || '',
-    pass: process.env.EMAIL_PASS || '',
-  },
-});
-
 interface SendInvoiceEmailParams {
   to: string;
   clientName: string;
@@ -28,6 +17,12 @@ export async function sendInvoiceEmail({
   issuerUserEmail,
   pdfBase64,
 }: SendInvoiceEmailParams) {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) {
+    console.warn("⚠️ BREVO_API_KEY no está configurada en las variables de entorno.");
+    return { success: false, error: 'Servicio de email no configurado' };
+  }
+
   const isRectification = invoiceNumber.startsWith('R-');
   const subject = isRectification 
     ? `Factura Rectificativa ${invoiceNumber} - ${companyName}` 
@@ -66,7 +61,7 @@ export async function sendInvoiceEmail({
             </div>
 
             <p style="font-size: 13px; color: #64748b;">
-              Adjunto encontrará el documento reglamentario en PDF con su código de verificación QR. Si tiene alguna duda o notificación sobre el pago, puede responder directamente a este mensaje.
+              Adjunto encontrará el documento reglamentario en PDF con su código de verificación QR. Si tiene alguna duda sobre el documento o el pago, puede responder directamente a este mensaje.
             </p>
           </div>
           <div class="footer">
@@ -77,29 +72,55 @@ export async function sendInvoiceEmail({
     </html>
   `;
 
-  const mailOptions: SendMailOptions = {
-    from: `"${companyName}" <${process.env.EMAIL_USER}>`,
-    to: to.trim(),
-    replyTo: issuerUserEmail || process.env.EMAIL_USER,
-    subject,
-    html: htmlContent,
-  };
-
+  const attachmentList: Array<{ name: string; content: string }> = [];
   if (pdfBase64) {
-    const cleanBase64 = pdfBase64.includes('base64,') 
-      ? pdfBase64.split('base64,')[1] 
-      : pdfBase64;
-
-    mailOptions.attachments = [
-      {
-        filename: `Factura_${invoiceNumber}.pdf`,
-        content: Buffer.from(cleanBase64.replace(/\s/g, ''), 'base64'),
-        contentType: 'application/pdf',
-      },
-    ];
+    const cleanBase64 = pdfBase64.includes('base64,') ? pdfBase64.split('base64,')[1] : pdfBase64;
+    attachmentList.push({
+      name: `Factura_${invoiceNumber}.pdf`,
+      content: cleanBase64.replace(/\s/g, ''),
+    });
   }
 
-  return await transporter.sendMail(mailOptions);
+  const payload: any = {
+    sender: {
+      name: companyName || process.env.EMAIL_FROM_NAME || 'Facturify',
+      email: process.env.EMAIL_FROM || 'soporte@facturify.es',
+    },
+    to: [{ email: to.trim(), name: clientName }],
+    subject,
+    htmlContent,
+  };
+
+  if (issuerUserEmail) {
+    payload.replyTo = { email: issuerUserEmail };
+  }
+
+  if (attachmentList.length > 0) {
+    payload.attachment = attachmentList;
+  }
+
+  try {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': apiKey,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('❌ Error API Brevo:', errorData);
+      return { success: false, error: 'Error enviando correo' };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('❌ Error de conexión al enviar email:', error);
+    return { success: false, error: error?.message || 'Error de red' };
+  }
 }
 
 interface SendPaymentReminderParams {
@@ -121,6 +142,9 @@ export async function sendPaymentReminderEmail({
   companyName,
   issuerUserEmail,
 }: SendPaymentReminderParams) {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) return { success: false, error: 'API Key no configurada' };
+
   const subject = `Recordatorio de Vencimiento: Factura ${invoiceNumber} (${companyName})`;
 
   const htmlContent = `
@@ -148,7 +172,7 @@ export async function sendPaymentReminderEmail({
           </div>
           <div class="content">
             <p>Estimado/a <strong>${clientName}</strong>,</p>
-            <p>Le recordamos que la factura <strong>${invoiceNumber}</strong> vencerá en <strong>7 días (${dueDateFormatted})</strong>.</p>
+            <p>Le recordamos que la factura <strong>${invoiceNumber}</strong> vencerá próximamente (<strong>${dueDateFormatted}</strong>).</p>
             
             <div class="card">
               <div style="font-size: 12px; font-weight: 700; color: #64748b;">IMPORTE PENDIENTE</div>
@@ -159,7 +183,7 @@ export async function sendPaymentReminderEmail({
             </div>
 
             <p style="font-size: 13px; color: #64748b;">
-              Si ya ha tramitado la transferencia o el pago, por favor ignore este mensaje. Si necesita concertar otro método o tiene alguna duda, puede responder directamente a este correo.
+              Si ya ha tramitado la transferencia o el abono, ignore este mensaje. Si necesita concertar otro método o tiene alguna duda, puede responder directamente a este correo.
             </p>
           </div>
           <div class="footer">
@@ -170,13 +194,33 @@ export async function sendPaymentReminderEmail({
     </html>
   `;
 
-  const mailOptions: SendMailOptions = {
-    from: `"${companyName}" <${process.env.EMAIL_USER}>`,
-    to: to.trim(),
-    replyTo: issuerUserEmail || process.env.EMAIL_USER,
+  const payload: any = {
+    sender: {
+      name: companyName || process.env.EMAIL_FROM_NAME || 'Facturify',
+      email: process.env.EMAIL_FROM || 'soporte@facturify.es',
+    },
+    to: [{ email: to.trim(), name: clientName }],
     subject,
-    html: htmlContent,
+    htmlContent,
   };
 
-  return await transporter.sendMail(mailOptions);
+  if (issuerUserEmail) {
+    payload.replyTo = { email: issuerUserEmail };
+  }
+
+  try {
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': apiKey,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    return { success: response.ok };
+  } catch (error: any) {
+    return { success: false, error: error?.message };
+  }
 }
