@@ -21,4 +21,13 @@ export const EmitInvoiceSchema = z.object({
   path: ["dueDate"], // Esto marca el error específicamente en el campo de vencimiento
 });
 
+
+// Esquema para validar el Login con reCAPTCHA
+export const LoginSchema = z.object({
+  email: z.string().email('Formato de email inválido'),
+  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
+  recaptchaToken: z.string().min(1, 'Por favor, completa la verificación de reCAPTCHA'),
+});
+
+export type LoginInput = z.infer<typeof LoginSchema>;
 export type EmitInvoiceInput = z.infer<typeof EmitInvoiceSchema>;
