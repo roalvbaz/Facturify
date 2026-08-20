@@ -1,33 +1,33 @@
 'use client';
 
 import { useState } from 'react';
-import { deleteCustomerAction } from '@/actions/customer.actions';
+import { deleteProductAction } from '@/actions/product.actions';
 import { showToast } from '@/lib/utils/toast';
 
-export default function DeleteCustomerButton({ 
-  customerId, 
-  customerName 
+export default function DeleteProductButton({ 
+  productId, 
+  productName 
 }: { 
-  customerId: string; 
-  customerName: string;
+  productId: string; 
+  productName: string;
 }) {
   const [loading, setLoading] = useState(false);
-  const [showModal, setShowModal] = useState(false);
+  const [showModal, setShowModal] = useState(false); // Estado para nuestro propio modal
 
   const handleDelete = async () => {
     setLoading(true);
     try {
-      const res = await deleteCustomerAction(customerId);
+      const res = await deleteProductAction(productId);
       if (res.success) {
-        showToast.success('Cliente eliminado correctamente');
+        showToast.success('Producto eliminado correctamente');
       } else {
-        showToast.error(res.error || 'No se pudo eliminar el cliente');
+        showToast.error(res.error || 'No se pudo eliminar el producto');
       }
     } catch (err: any) {
       showToast.error(err.message || 'Error inesperado al eliminar');
     } finally {
       setLoading(false);
-      setShowModal(false);
+      setShowModal(false); // Cerramos el modal al terminar
     }
   };
 
@@ -36,9 +36,9 @@ export default function DeleteCustomerButton({
       {/* Botón de la papelera */}
       <button
         type="button"
-        onClick={() => setShowModal(true)}
+        onClick={() => setShowModal(true)} // En lugar de window.confirm, abrimos el modal
         disabled={loading}
-        title="Eliminar cliente"
+        title="Eliminar producto"
         style={{
           background: 'none',
           border: 'none',
@@ -52,7 +52,7 @@ export default function DeleteCustomerButton({
         {loading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-trash"></i>}
       </button>
 
-      {/* Modal Custom */}
+      {/* Nuestro Modal Custom (superpuesto a todo) */}
       {showModal && (
         <div style={{
           position: 'fixed',
@@ -81,11 +81,11 @@ export default function DeleteCustomerButton({
             <i className="fas fa-exclamation-triangle" style={{ fontSize: '2.5rem', color: '#ef4444', marginBottom: '1rem' }}></i>
             
             <h3 style={{ margin: '0 0 0.5rem 0', fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-color)' }}>
-              ¿Eliminar cliente?
+              ¿Eliminar producto?
             </h3>
             
             <p style={{ margin: '0 0 1.5rem 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              Estás a punto de eliminar a <strong>"{customerName}"</strong> de tu directorio. Esta acción no se puede deshacer.
+              Estás a punto de eliminar <strong>"{productName}"</strong> de tu catálogo. Esta acción no se puede deshacer.
             </p>
             
             <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>

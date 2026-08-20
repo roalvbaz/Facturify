@@ -29,7 +29,7 @@ export default function RootLayout({
       {/* Reseteamos márgenes para evitar desplazamientos y quitamos las clases antiguas */}
       <body style={{ margin: 0, padding: 0, minHeight: '100vh' }}>
         {children}
-        <Toaster richColors position="top-right" />
+        <Toaster closeButton richColors position="top-right" />
       </body>
     </html>
   );

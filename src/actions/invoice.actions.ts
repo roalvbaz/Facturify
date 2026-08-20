@@ -6,8 +6,8 @@ import { eq, and, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import crypto from 'crypto';
+import { sendInvoiceEmail } from '@/lib/email/email';
 
-// Función auxiliar para construir la URL del QR de Veri*factu
 function construirUrlQr({ emisorNif, numeroFactura, totalCentimos, fechaExpedicion }: {
   emisorNif: string;
   numeroFactura: string;
@@ -19,9 +19,6 @@ function construirUrlQr({ emisorNif, numeroFactura, totalCentimos, fechaExpedici
   return `https://www.agenciatributaria.es/qr?nif=${emisorNif}&num=${numeroFactura}&fecha=${fechaStr}&importe=${totalEur}`;
 }
 
-/**
- * 1. Acción para CAMBIAR el estado de una factura de forma segura
- */
 export async function toggleInvoiceStatusAction(id: string, currentStatus: string) {
   try {
     const normalizedStatus = (currentStatus || '').toLowerCase().trim();
@@ -38,13 +35,21 @@ export async function toggleInvoiceStatusAction(id: string, currentStatus: strin
 
     return { success: true, newStatus };
   } catch (error: any) {
-    console.error("❌ ERROR CRÍTICO EN toggleInvoiceStatusAction:", error);
-    throw new Error(error?.message || "Error desconocido en base de datos al cambiar el estado.");
+    console.error("❌ ERROR EN toggleInvoiceStatusAction:", error);
+    throw new Error(error?.message || "Error al cambiar el estado.");
   }
 }
 
 interface EmitInvoicePayload {
   seriesCode?: string;
+  issuedDate?: string;
+  dueDate?: string;
+  paymentMethod?: string;
+  irpfRate?: number;
+  sendEmail?: boolean;
+  pdfBase64?: string;
+  rectifiesInvoiceId?: string;
+  rectificationReason?: string;
   customerData?: {
     nombre?: string;
     nif?: string;
@@ -59,9 +64,6 @@ interface EmitInvoicePayload {
   }>;
 }
 
-/**
- * 2. Acción para EMITIR una nueva factura recibiendo un objeto tipado
- */
 export async function emitInvoiceAction(payload: EmitInvoicePayload) {
   try {
     const supabase = await createClient();
@@ -71,10 +73,35 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
       throw new Error("No autorizado");
     }
 
-    // Obtener la empresa del usuario autenticado
+    if (!payload.customerData?.nombre?.trim()) {
+      throw new Error("El nombre o razón social del cliente es obligatorio.");
+    }
+    if (!payload.customerData?.nif?.trim()) {
+      throw new Error("El NIF/CIF del cliente es obligatorio.");
+    }
+    if (!payload.customerData?.email?.trim()) {
+      throw new Error("El correo electrónico del cliente es obligatorio.");
+    }
+    if (!payload.dueDate || !payload.dueDate.trim()) {
+      throw new Error("La fecha de vencimiento es obligatoria.");
+    }
+    if (!payload.lines || payload.lines.length === 0) {
+      throw new Error("La factura debe contener al menos un concepto.");
+    }
+
+    for (const line of payload.lines) {
+      if (!line.description || !line.description.trim()) {
+        throw new Error("Todos los conceptos deben tener una descripción.");
+      }
+      if (line.quantity === undefined || line.quantity === null || Number(line.quantity) === 0) {
+        throw new Error("La cantidad de cada concepto debe ser distinta de 0.");
+      }
+    }
+
     const [membresia] = await db
       .select({
         companyId: companies.id,
+        companyName: companies.name,
         taxId: companies.tax_id,
       })
       .from(company_members)
@@ -89,22 +116,28 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
     const activeCompanyId = membresia.companyId;
     const issuerTaxId = membresia.taxId || "A00000000";
 
-    // Extraer datos del cliente del payload recibido
     const clientName = payload.customerData?.nombre || 'Cliente General';
     const clientTaxId = payload.customerData?.nif || '';
     const clientEmail = payload.customerData?.email || '';
     const clientAddress = payload.customerData?.direccion || '';
-    const seriesCode = payload.seriesCode || 'F';
     
-    const lines = payload.lines || [];
-
-    if (!lines || lines.length === 0) {
-      throw new Error("La factura debe contener al menos una línea de concepto.");
+    const isRectification = Boolean(payload.rectifiesInvoiceId);
+    const seriesCode = payload.seriesCode || (isRectification ? 'R' : 'F');
+    
+    let initialStatus = 'Pendiente';
+    if (isRectification) {
+      initialStatus = 'Pagada';
+    } else {
+      const immediateMethods = ['TARJETA', 'EFECTIVO', 'BIZUM'];
+      if (payload.paymentMethod && immediateMethods.includes(payload.paymentMethod)) {
+        initialStatus = 'Pagada';
+      }
     }
 
-    // GESTIÓN INTELIGENTE DE CLIENTES (Guarda y actualiza email)
-    let finalCustomerId: string | null = null;
+    const lines = payload.lines || [];
 
+    // Gestión del cliente
+    let finalCustomerId: string | null = null;
     if (clientTaxId && clientTaxId.trim() !== '' && clientTaxId !== '-') {
       const [existingClient] = await db
         .select()
@@ -119,7 +152,6 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
 
       if (existingClient) {
         finalCustomerId = existingClient.id;
-        // Actualizamos nombre, dirección y email
         await db.update(customers)
           .set({ 
             name: clientName, 
@@ -128,7 +160,6 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
           })
           .where(eq(customers.id, existingClient.id));
       } else {
-        // Creamos el cliente guardando explícitamente el email
         const [newClient] = await db
           .insert(customers)
           .values({
@@ -144,8 +175,9 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
       }
     }
 
-    // Numeración secuencial por empresa, serie y año
-    const currentYear = new Date().getFullYear();
+    const issuedAt = payload.issuedDate ? new Date(payload.issuedDate) : new Date();
+    const currentYear = issuedAt.getFullYear();
+
     const [lastInvoice] = await db
       .select({ number: invoices.number })
       .from(invoices)
@@ -162,7 +194,6 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
     const nextNumber = lastInvoice ? lastInvoice.number + 1 : 1;
     const formattedInvoiceNumber = `${seriesCode}-${currentYear}-${String(nextNumber).padStart(4, '0')}`;
 
-    // Cálculo de importes en céntimos
     let subtotalCents = 0;
     let vatTotalCents = 0;
 
@@ -186,10 +217,10 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
       };
     });
 
-    const totalCents = subtotalCents + vatTotalCents;
-    const issuedAt = new Date();
+    const irpfPercent = Number(payload.irpfRate) || 0;
+    const irpfTotalCents = Math.round(subtotalCents * (irpfPercent / 100));
+    const totalCents = subtotalCents + vatTotalCents - irpfTotalCents;
 
-    // Veri*factu: Obtener el hash anterior para el encadenamiento
     const [previousInvoice] = await db
       .select({ current_hash: invoices.current_hash })
       .from(invoices)
@@ -198,12 +229,9 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
       .limit(1);
 
     const prevHash = previousInvoice?.current_hash || 'PREVIOUS_HASH_GENESIS';
-
-    // Generar cadena canónica y hash SHA-256
     const canonicalString = `${issuerTaxId}|${formattedInvoiceNumber}|${issuedAt.toISOString()}|${totalCents}|${prevHash}`;
     const currentHash = crypto.createHash('sha256').update(canonicalString).digest('hex');
 
-    // Generar URL para el QR
     const qrUrl = construirUrlQr({
       emisorNif: issuerTaxId,
       numeroFactura: formattedInvoiceNumber,
@@ -211,7 +239,10 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
       fechaExpedicion: issuedAt,
     });
 
-    // Insertar factura
+    const parsedDueDate = payload.dueDate && payload.dueDate.trim() !== '' 
+      ? new Date(payload.dueDate) 
+      : null;
+
     const [nuevaFactura] = await db
       .insert(invoices)
       .values({
@@ -222,7 +253,11 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
         number: nextNumber,
         formatted_number: formattedInvoiceNumber,
         issued_at: issuedAt,
-        status: 'Pendiente',
+        due_date: parsedDueDate,
+        status: initialStatus,
+        rectifies_invoice_id: payload.rectifiesInvoiceId || null,
+        rectification_type: isRectification ? 'DIFERENCIAS' : null,
+        rectification_reason: payload.rectificationReason || null,
         prev_hash: prevHash,
         current_hash: currentHash,
         canonical_string: canonicalString,
@@ -235,7 +270,6 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
       })
       .returning({ id: invoices.id });
 
-    // Insertar líneas de detalle
     for (const line of formattedLines) {
       await db.insert(invoice_lines).values({
         invoice_id: nuevaFactura.id,
@@ -247,11 +281,34 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
       });
     }
 
+    // ENVÍO AUTOMÁTICO DIRECTO AL CLIENTE (SIN COPIA AL EMISOR)
+    let emailSent = false;
+    if (payload.sendEmail !== false && clientEmail) {
+      try {
+        await sendInvoiceEmail({
+          to: clientEmail,
+          clientName: clientName,
+          invoiceNumber: formattedInvoiceNumber,
+          totalEur: (totalCents / 100).toFixed(2),
+          companyName: membresia.companyName,
+          pdfBase64: payload.pdfBase64,
+        });
+        emailSent = true;
+      } catch (mailErr) {
+        console.error("❌ Error enviando email en emisión:", mailErr);
+      }
+    }
+
     revalidatePath('/historial');
     revalidatePath('/clientes');
     revalidatePath('/dashboard');
 
-    return { success: true, invoiceId: nuevaFactura.id };
+    return { 
+      success: true, 
+      invoiceId: nuevaFactura.id, 
+      formattedNumber: formattedInvoiceNumber,
+      emailSent 
+    };
 
   } catch (error: any) {
     console.error("❌ ERROR AL EMITIR FACTURA:", error);
@@ -259,9 +316,6 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
   }
 }
 
-/**
- * 3. Acción para OBTENER la empresa activa del usuario autenticado
- */
 export async function getActiveCompanyAction() {
   try {
     const supabase = await createClient();
@@ -293,9 +347,6 @@ export async function getActiveCompanyAction() {
   }
 }
 
-/**
- * 4. Acción para OBTENER el listado de clientes de la empresa activa
- */
 export async function getCompanyCustomersAction() {
   try {
     const supabase = await createClient();

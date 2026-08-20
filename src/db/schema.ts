@@ -64,6 +64,7 @@ export const customers = pgTable('customers', {
   created_at: timestamp('created_at').defaultNow().notNull(),
   telephone: text('telephone'),
   email: text('email'),
+  is_active: boolean("is_active").default(true).notNull(),
 });
 
 // ==========================================
@@ -106,10 +107,16 @@ export const invoices = pgTable(
     series_code: varchar('series_code', { length: 32 }).notNull(),
     year: integer('year').notNull(),
     number: integer('number').notNull(),
-    formatted_number: varchar('formatted_number', { length: 64 }).notNull(), // Ej: "F-2026-0001"
+    formatted_number: varchar('formatted_number', { length: 64 }).notNull(), // Ej: "F-2026-0001" o "R-2026-0001"
     issued_at: timestamp('issued_at').defaultNow().notNull(),
-    due_date:timestamp(''),
+    due_date: timestamp('due_date'),
     status: varchar('status', { length: 32 }).default('Pendiente').notNull(),
+
+    // Campos de Rectificación (RD 1619/2012 & Veri*factu)
+    rectifies_invoice_id: uuid('rectifies_invoice_id')
+      .references((): any => invoices.id, { onDelete: 'set null' }),
+    rectification_type: varchar('rectification_type', { length: 32 }), // 'DIFERENCIAS' | 'SUSTITUCION'
+    rectification_reason: text('rectification_reason'), // Ej: 'R1 - Error fundado en derecho' o 'R4 - Devolución de mercancías'
 
     // Campos de encadenamiento e integridad Veri*factu
     prev_hash: text('prev_hash'),
@@ -117,7 +124,7 @@ export const invoices = pgTable(
     canonical_string: text('canonical_string'),
     qr_code_url: text('qr_code_url'),
 
-    // Importes normalizados en céntimos
+    // Importes normalizados en céntimos (admiten valores negativos para abonos)
     subtotal_cents: integer('subtotal_cents').default(0).notNull(),
     vat_total_cents: integer('vat_total_cents').default(0).notNull(),
     total_cents: integer('total_cents').default(0).notNull(),
@@ -182,3 +189,22 @@ export const products = pgTable('products', {
   created_at: timestamp('created_at').defaultNow().notNull(),
   updated_at: timestamp('updated_at').defaultNow().notNull(),
 });
+
+export const company_settings = pgTable("company_settings", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  company_id: uuid("company_id")
+    .references(() => companies.id, { onDelete: "cascade" })
+    .notNull()
+    .unique(),
+  theme_color: varchar("theme_color", { length: 7 }).default("#4f46e5"),
+  font_family: varchar("font_family", { length: 50 }).default("Roboto"),
+  logo_url: text("logo_url"),
+  updated_at: timestamp("updated_at", { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+});
+
+export type CompanySettings = typeof company_settings.$inferSelect;
+
+export type Product = typeof products.$inferSelect;
+export type NewProduct = typeof products.$inferInsert;

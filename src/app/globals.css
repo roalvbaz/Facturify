@@ -370,3 +370,39 @@ body {
     @apply font-sans;
   }
 }
+
+[data-sonner-toaster] [data-close-button] {
+  left: -6px !important;
+  right: auto !important;
+  top: -6px !important;
+  background-color: inherit !important;
+  color: inherit !important;
+  border: 1px solid currentColor !important;
+  border-radius: 50% !important;
+  width: 17px !important;
+  height: 17px !important;
+  min-width: 17px !important;
+  min-height: 17px !important;
+  padding: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12) !important;
+  opacity: 1 !important;
+  transform: none !important;
+  cursor: pointer !important;
+  transition: transform 0.15s ease, filter 0.15s ease !important;
+}
+
+[data-sonner-toaster] [data-close-button] svg {
+  width: 10px !important;
+  height: 10px !important;
+  color: currentColor !important;
+  stroke: currentColor !important;
+  stroke-width: 2.2 !important;
+}
+
+[data-sonner-toaster] [data-close-button]:hover {
+  filter: brightness(0.9) !important;
+  transform: scale(1.1) !important;
+}
