@@ -3,24 +3,90 @@
 import { db } from "@/db";
 import { companies, company_members, company_settings } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
 
-async function getActiveCompanyId() {
+// 1. Obtener todas las empresas del usuario actual
+export async function getUserCompanies() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error("No autenticado");
 
-  const [member] = await db
-    .select()
+  const userCompanies = await db
+    .select({
+      id: companies.id,
+      name: companies.name,
+      tax_id: companies.tax_id,
+      role: company_members.role,
+    })
     .from(company_members)
-    .where(eq(company_members.user_id, user.id))
-    .limit(1);
+    .innerJoin(companies, eq(company_members.company_id, companies.id))
+    .where(eq(company_members.user_id, user.id));
 
-  if (!member) throw new Error("Empresa no encontrada");
-  return member.company_id;
+  return userCompanies;
 }
 
+// 2. Obtener el ID de la empresa activa actual (respetando la cookie y validando pertenencia)
+export async function getActiveCompanyId() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("No autenticado");
+
+  const cookieStore = await cookies();
+  const activeCompanyIdCookie = cookieStore.get("active_company_id")?.value;
+
+  // Obtener todas las empresas del usuario
+  const userCompanies = await getUserCompanies();
+  if (userCompanies.length === 0) throw new Error("No tienes ninguna empresa asignada");
+
+  // Si hay una cookie activa, comprobamos que el usuario pertenezca realmente a ella
+  if (activeCompanyIdCookie) {
+    const isValid = userCompanies.some((c) => c.id === activeCompanyIdCookie);
+    if (isValid) {
+      return activeCompanyIdCookie;
+    }
+  }
+
+  // Por defecto, si no hay cookie o no es válida, devolvemos la primera
+  return userCompanies[0].id;
+}
+
+// 3. Server action para cambiar la empresa activa desde el selector
+export async function setActiveCompanyAction(companyId: string) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("No autenticado");
+
+  // Validar que el usuario pertenece a esta empresa por seguridad
+  const [membership] = await db
+    .select()
+    .from(company_members)
+    .where(
+      and(
+        eq(company_members.user_id, user.id),
+        eq(company_members.company_id, companyId)
+      )
+    )
+    .limit(1);
+
+  if (!membership) {
+    throw new Error("No tienes permisos para acceder a esta empresa");
+  }
+
+  const cookieStore = await cookies();
+  cookieStore.set("active_company_id", companyId, {
+    path: "/",
+    maxAge: 60 * 60 * 24 * 365, // 1 año
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+  });
+
+  revalidatePath("/(dashboard)", "layout");
+}
+
+// 4. Tu función original de actualizar configuración (ahora usa el nuevo getActiveCompanyId)
 export async function updateCompanySettingsAction(formData: FormData) {
   try {
     const companyId = await getActiveCompanyId();
