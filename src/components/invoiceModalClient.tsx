@@ -90,7 +90,7 @@ export default function InvoiceModalClient({
         clientName: factura.client_name || 'Cliente',
         invoiceNumber: factura.formatted_number,
         totalEur,
-        companyName: empresa?.name || 'Facturify',
+        companyName: empresa?.name || 'FacturON',
         companyEmail: empresa?.email,
         pdfBase64,
       });
@@ -125,7 +125,7 @@ export default function InvoiceModalClient({
       })),
     };
 
-    sessionStorage.setItem('facturify_rectification_data', JSON.stringify(rectificationData));
+    sessionStorage.setItem('FacturON_rectification_data', JSON.stringify(rectificationData));
     setShowRectifyConfirm(false);
     handleClose();
     router.push('/nueva-factura?mode=rectification');

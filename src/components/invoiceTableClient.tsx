@@ -34,7 +34,7 @@ export default function InvoicesTableClient({
   const [loadingReminderId, setLoadingReminderId] = useState<string | null>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem('facturify_invoice_columns');
+    const saved = localStorage.getItem('FacturON_invoice_columns');
     if (saved) {
       try {
         setVisibleColumns(JSON.parse(saved));
@@ -53,7 +53,7 @@ export default function InvoicesTableClient({
   const toggleColumn = (id: string) => {
     const updated = { ...visibleColumns, [id]: !visibleColumns[id] };
     setVisibleColumns(updated);
-    localStorage.setItem('facturify_invoice_columns', JSON.stringify(updated));
+    localStorage.setItem('FacturON_invoice_columns', JSON.stringify(updated));
   };
 
   const isColVisible = (id: string) => visibleColumns[id] !== false;

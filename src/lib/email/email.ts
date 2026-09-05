@@ -71,7 +71,7 @@ export async function sendInvoiceEmail({
               </p>
             </div>
             <div class="footer">
-              Factura emitida electrónicamente mediante Facturify.
+              Factura emitida electrónicamente mediante FacturON.
             </div>
           </div>
         </body>
@@ -171,7 +171,7 @@ export async function sendPaymentReminderEmail({
               </p>
             </div>
             <div class="footer">
-              Notificación automática enviada a través de Facturify.
+              Notificación automática enviada a través de FacturON.
             </div>
           </div>
         </body>

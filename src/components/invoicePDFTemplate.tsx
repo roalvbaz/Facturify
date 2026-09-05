@@ -52,7 +52,7 @@ export default function InvoicePDFTemplate({
                   />
                 )}
                 <div style={{ fontSize: '17px', fontWeight: 'bold', color: '#0f172a', marginBottom: '2px' }}>
-                  {empresa?.name || empresa?.nombre || 'FACTURIFY'}
+                  {empresa?.name || empresa?.nombre || 'FacturON'}
                 </div>
                 <div style={{ fontSize: '11px', color: '#475569', marginBottom: '2px' }}>
                   NIF: {empresa?.tax_id || empresa?.nif || '-'}
@@ -218,7 +218,7 @@ export default function InvoicePDFTemplate({
                   Emitido al amparo del Reglamento que regula los requisitos de los sistemas informáticos de facturación (Real Decreto 1007/2023).
                 </div>
                 <div style={{ fontSize: '9px', color: primaryColor, fontWeight: 'bold' }}>
-                  Generado de forma segura con Facturify
+                  Generado de forma segura con FacturON
                 </div>
               </td>
               <td style={{ verticalAlign: 'middle', width: '20%', textAlign: 'right', paddingTop: '6px' }}>

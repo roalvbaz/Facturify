@@ -14,7 +14,7 @@ export interface ToastOptions extends ExternalToast {
 }
 
 /**
- * Utilidad centralizada para manejar notificaciones Toast en Facturify.
+ * Utilidad centralizada para manejar notificaciones Toast en FacturON.
  */
 export const showToast = {
   promise: async <T>(

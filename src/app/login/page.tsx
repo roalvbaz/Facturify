@@ -56,7 +56,7 @@ export default function LoginPage() {
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
           <Image
             src="/img/banner.png"
-            alt="Facturify Logo"
+            alt="FacturON Logo"
             width={280}
             height={65}
             priority
@@ -120,7 +120,7 @@ export default function LoginPage() {
         </form>
 
         <div style={{ textAlign: 'center', marginTop: '2rem', fontSize: '0.875rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.5rem' }}>
-          <p style={{ color: '#64748b', margin: 0 }}>¿Aún no tienes cuenta? <a href="mailto:hola@tudominio.com" style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 800 }}>Contacta con nosotros</a></p>
+          <p style={{ color: '#64748b', margin: 0 }}>¿Aún no tienes cuenta? <a href="mailto:soporte.facturon@gmail.com" style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 800 }}>Contacta con nosotros</a></p>
         </div>
       </div>
     </div>

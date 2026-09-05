@@ -76,7 +76,7 @@ export default function NuevaFacturaPage() {
 
     const searchParams = new URLSearchParams(window.location.search);
     if (searchParams.get('mode') === 'rectification') {
-      const rawData = sessionStorage.getItem('facturify_rectification_data');
+      const rawData = sessionStorage.getItem('FacturON_rectification_data');
       if (rawData) {
         try {
           const data = JSON.parse(rawData);
@@ -92,7 +92,7 @@ export default function NuevaFacturaPage() {
             setLines(data.lines);
           }
           showToast.info(`Emitiendo Factura Rectificativa para ${data.rectifiesNumber}`);
-          sessionStorage.removeItem('facturify_rectification_data');
+          sessionStorage.removeItem('FacturON_rectification_data');
         } catch (e) {
           console.error(e);
         }

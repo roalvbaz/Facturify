@@ -1,4 +1,4 @@
-# 📄 FACTURIFY — Plan Director de Proyecto & Especificación Técnica
+# 📄 FacturON — Plan Director de Proyecto & Especificación Técnica
 
 > **Versión del Documento:** 2.1.0  
 > **Estado:** Fase de Diseño & Especificación de Requisitos  
@@ -25,7 +25,7 @@
 
 ## 1. Resumen Ejecutivo del Proyecto
 
-**Facturify** es un software de facturación B2B en la nube (*Software as a Service*) diseñado para autónomos y pequeñas/medianas empresas en España. Su objetivo prioritario es permitir la emisión de facturas ordinarias y rectificativas con plena validez legal, garantizando la inalterabilidad, trazabilidad y verificación tributaria exigida por el **Reglamento Veri\*factu de la AEAT**.
+**FacturON** es un software de facturación B2B en la nube (*Software as a Service*) diseñado para autónomos y pequeñas/medianas empresas en España. Su objetivo prioritario es permitir la emisión de facturas ordinarias y rectificativas con plena validez legal, garantizando la inalterabilidad, trazabilidad y verificación tributaria exigida por el **Reglamento Veri\*factu de la AEAT**.
 
 ### Objetivos Principales:
 * **Cumplimiento Normativo Total:** Cumplir el Art. 29.2.j de la LGT, el RD 1007/2023 y la Orden HAC/1177/2024, evitando sanciones por software no certificado.
@@ -111,7 +111,7 @@ La documentación del proyecto no es un entregable estático final, sino una **b
 ### 5.1. Estructura de Carpetas del Vault (`/docs`)
 
 ```
-Facturify-Vault/
+FacturON-Vault/
 ├── 00_Meta/                     # Directrices de documentación, plantillas y tags
 │   ├── Templates/               # Plantillas para ADRs, módulos, incidencias y pruebas
 │   └── Glossary.md              # Diccionario terminológico (fiscal, técnico, contable)
