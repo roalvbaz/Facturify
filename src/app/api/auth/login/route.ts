@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { LoginSchema } from '@/lib/validations/invoice';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
+import { db } from '@/db';
+import { audit_logs } from '@/db/schema';
 
 // Función para verificar el token de Google reCAPTCHA
 async function verifyRecaptcha(token: string): Promise<boolean> {
@@ -25,9 +27,9 @@ async function verifyRecaptcha(token: string): Promise<boolean> {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-
-    // 1. Validar datos estrictamente con Zod
     const result = LoginSchema.safeParse(body);
+    
+    // 1. Validar datos estrictamente con Zod
     if (!result.success) {
       return NextResponse.json(
         { error: 'Datos inválidos', details: result.error.issues },
@@ -77,7 +79,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 401 });
     }
 
-    return NextResponse.json({ success: true, user: data.user });
+    // 5. GUARDADO SIGILOSO EN LA CAJA NEGRA (AUDIT LOG)
+    // Extraemos la IP del cliente de las cabeceras de la petición
+    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'IP Desconocida';
+    
+    await db.insert(audit_logs).values({
+      user_id: data.user.id,
+      event_code: 'USER_LOGIN',
+      description: 'Inicio de sesión exitoso en el sistema',
+      ip_address: ip,
+    });
+
+    // 6. Devolver respuesta manteniendo las cookies de sesión intactas
+    const finalResponse = NextResponse.json({ success: true, user: data.user });
+    
+    response.cookies.getAll().forEach((cookie) => {
+      finalResponse.cookies.set(cookie.name, cookie.value, cookie);
+    });
+
+    return finalResponse;
+
   } catch (error) {
     console.error('Error interno en login:', error);
     return NextResponse.json({ error: 'Error interno del servidor' }, { status: 500 });

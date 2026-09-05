@@ -2,7 +2,9 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import crypto from 'crypto';
 
-export async function middleware(request: NextRequest) {
+// En Next.js 16, el antiguo middleware.ts se llama proxy.ts y vive al mismo
+// nivel que app/ (no dentro). Se exporta como función `proxy` y corre en Node.
+export async function proxy(request: NextRequest) {
   // 1. Inicializamos la respuesta base y añadimos protección CSRF
   let response = NextResponse.next({
     request: {
@@ -13,7 +15,7 @@ export async function middleware(request: NextRequest) {
   const csrfNonce = crypto.randomUUID();
   response.headers.set('X-CSRF-Token', csrfNonce);
 
-  // 2. Creamos el cliente de Supabase adaptado al Edge
+  // 2. Creamos el cliente de Supabase adaptado al proxy
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -43,14 +45,25 @@ export async function middleware(request: NextRequest) {
   // 3. Verificamos la sesión real con Supabase
   const { data: { session } } = await supabase.auth.getSession();
 
-  const isLoginPage = request.nextUrl.pathname.startsWith('/login');
+  const pathname = request.nextUrl.pathname;
+
+  // Rutas accesibles SIN sesión:
+  // - /login (página de acceso)
+  // - /recuperar-password (página de recuperación)
+  // - /api/auth/* (login y canje del código del correo: todavía no hay cookie)
+  // - /api/cron/* (disparado por un cron externo, sin cookies de usuario)
+  const isPublicRoute =
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/recuperar-password') ||
+    pathname.startsWith('/api/auth/') ||
+    pathname.startsWith('/api/cron/');
 
   // 4. Lógica de protección de rutas
-  if (!session && !isLoginPage) {
+  if (!session && !isPublicRoute) {
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  if (session && isLoginPage) {
+  if (session && (pathname.startsWith('/login') || pathname.startsWith('/recuperar-password'))) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
   }
 

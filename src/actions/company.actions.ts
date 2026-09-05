@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { companies, company_members, company_settings } from "@/db/schema";
+import { companies, company_members, company_settings, audit_logs } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
@@ -92,6 +92,10 @@ export async function updateCompanySettingsAction(formData: FormData) {
     const companyId = await getActiveCompanyId();
     const supabase = await createClient();
 
+    // AÑADIDO PARA EL AUDIT LOG: Sacamos el user para saber quién hizo el cambio
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("No autenticado");
+
     const name = (formData.get("name") as string)?.trim();
     const tax_id = (formData.get("tax_id") as string)?.trim();
     const address = (formData.get("address") as string)?.trim() || null;
@@ -139,6 +143,14 @@ export async function updateCompanySettingsAction(formData: FormData) {
         target: company_settings.company_id,
         set: { theme_color, logo_url, updated_at: new Date() },
       });
+
+    // 🕵️ AQUI ESTÁ EL GUARDADO SIGILOSO DEL AUDIT LOG 🕵️
+    await db.insert(audit_logs).values({
+      company_id: companyId,
+      user_id: user.id,
+      event_code: 'CONFIG_UPDATE',
+      description: 'Modificación de configuración fiscal, NIF o logotipo de la empresa',
+    });
 
     revalidatePath("/(dashboard)", "layout");
     revalidatePath("/configuracion");

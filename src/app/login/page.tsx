@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import ReCAPTCHA from 'react-google-recaptcha';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -13,11 +14,17 @@ export default function LoginPage() {
   const recaptchaRef = useRef<ReCAPTCHA>(null);
   const router = useRouter();
 
+  // Capturar errores que vengan por la URL (ej: enlace de correo caducado)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlError = params.get('error');
+    if (urlError) setError(urlError);
+  }, []);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    // Obtener el token del componente reCAPTCHA
     const token = recaptchaRef.current?.getValue();
     if (!token) {
       setError('Por favor, completa el reCAPTCHA para demostrar que no eres un robot.');
@@ -37,7 +44,7 @@ export default function LoginPage() {
 
       if (!res.ok) {
         setError(data.error || 'Credenciales inválidas');
-        recaptchaRef.current?.reset(); // Limpiar el captcha si falla
+        recaptchaRef.current?.reset();
       } else {
         router.push('/dashboard');
         router.refresh();
@@ -90,7 +97,13 @@ export default function LoginPage() {
           </div>
 
           <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-            <label htmlFor="password" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>Contraseña</label>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <label htmlFor="password" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', margin: 0 }}>Contraseña</label>
+              {/* ENLACE NUEVO */}
+              <Link href="/recuperar-password" style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
             <input
               type="password"
               id="password"

@@ -1,7 +1,7 @@
 'use server';
 
 import { db } from '@/db';
-import { invoices, invoice_lines, companies, company_members, customers } from '@/db/schema';
+import { invoices, invoice_lines, companies, company_members, customers, audit_logs } from '@/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
@@ -298,6 +298,14 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
         console.error("❌ Error enviando email en emisión:", mailErr);
       }
     }
+
+    // 🕵️ GUARDADO SIGILOSO DE EMISIÓN EN EL AUDIT LOG
+    await db.insert(audit_logs).values({
+      company_id: activeCompanyId,
+      user_id: user.id,
+      event_code: 'INVOICE_ISSUED',
+      description: `Factura ${formattedInvoiceNumber} emitida de forma inmutable (${isRectification ? 'Rectificativa' : 'Ordinaria'})`,
+    });
 
     revalidatePath('/historial');
     revalidatePath('/clientes');
