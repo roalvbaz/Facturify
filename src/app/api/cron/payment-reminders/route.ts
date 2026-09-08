@@ -3,7 +3,7 @@ import { db } from '@/db';
 import { invoices, customers, companies, company_members } from '@/db/schema';
 import { eq, and, gte, lte } from 'drizzle-orm';
 import { sendPaymentReminderEmail } from '@/lib/email/email';
-import { createClient } from '@supabase/supabase-js';
+import { createAdminClient } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,10 +43,7 @@ export async function GET() {
       );
 
     // Cliente administrativo de Supabase para obtener el email real del usuario creador
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
+    const supabaseAdmin = createAdminClient();
 
     let sentCount = 0;
 

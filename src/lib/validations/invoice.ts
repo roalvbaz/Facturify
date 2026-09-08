@@ -36,5 +36,11 @@ export const RegisterSchema = z.object({
   recaptchaToken: z.string().min(1, 'Por favor, completa la verificación de reCAPTCHA'),
 });
 
+// Esquema para el endpoint de invitación (solo el email, sin contraseña)
+export const InviteSchema = z.object({
+  email: z.string().email('Formato de email inválido'),
+});
+
 export type LoginInput = z.infer<typeof LoginSchema>;
+export type InviteInput = z.infer<typeof InviteSchema>;
 export type EmitInvoiceInput = z.infer<typeof EmitInvoiceSchema>;
