@@ -3,11 +3,16 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { signOut } from '@/app/actions/auth';
+import CompanySelector from '@/components/companySelector';
 
-export default function Sidebar({ 
-  nombreEmpresa, 
-  emailUsuario 
-}: { 
+export default function Sidebar({
+  companies,
+  activeCompanyId,
+  nombreEmpresa,
+  emailUsuario,
+}: {
+  companies: Array<{ id: string; name: string; tax_id: string; role: string }>;
+  activeCompanyId: string;
   nombreEmpresa: string;
   emailUsuario: string;
 }) {
@@ -40,7 +45,7 @@ export default function Sidebar({
       flexDirection: 'column',
       boxShadow: '4px 0 10px rgba(0,0,0,0.1)'
     }}>
-      
+
       {/* 1. Cabecera con Nombre de Empresa + Engranaje de Configuración */}
       <div style={{ padding: '1.5rem', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', overflow: 'hidden' }}>
@@ -55,8 +60,8 @@ export default function Sidebar({
         </div>
 
         {/* Engranaje de Configuración arriba */}
-        <Link 
-          href="/configuracion" 
+        <Link
+          href="/configuracion"
           title="Configuración de la empresa"
           style={{
             display: 'flex',
@@ -74,6 +79,11 @@ export default function Sidebar({
         >
           <i className="fas fa-cog" style={{ fontSize: '0.9rem' }}></i>
         </Link>
+      </div>
+
+      {/* 1b. Selector de empresa activa */}
+      <div style={{ padding: '0.9rem 1rem', borderBottom: '1px solid #334155' }}>
+        <CompanySelector companies={companies} activeCompanyId={activeCompanyId} />
       </div>
 
       {/* 2. Menú de Navegación Dinámico (Sin Configuración abajo) */}
@@ -94,8 +104,11 @@ export default function Sidebar({
           <i className="fas fa-box" style={{ width: '20px', textAlign: 'center' }}></i> Productos
         </Link>
         <Link href="/gastos" style={linkStyle(isActive('/gastos'))}>
-          <i className="fas fa-receipt" style={{ width: '20px', textAlign: 'center' }}></i> 
+          <i className="fas fa-receipt" style={{ width: '20px', textAlign: 'center' }}></i>
           Gastos
+        </Link>
+        <Link href="/empresas" style={linkStyle(isActive('/empresas'))}>
+          <i className="fas fa-building" style={{ width: '20px', textAlign: 'center' }}></i> Mis Empresas
         </Link>
       </nav>
 

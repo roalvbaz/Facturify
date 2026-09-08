@@ -18,6 +18,7 @@ export async function getUserCompanies() {
       id: companies.id,
       name: companies.name,
       tax_id: companies.tax_id,
+      address: companies.address,
       role: company_members.role,
     })
     .from(company_members)
@@ -50,6 +51,78 @@ export async function getActiveCompanyId() {
 
   // Por defecto, si no hay cookie o no es válida, devolvemos la primera
   return userCompanies[0].id;
+}
+
+// 2b. Server action para crear una NUEVA empresa y asociarla al usuario como OWNER
+export async function createCompanyAction(formData: FormData) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("No autenticado");
+
+    const name = (formData.get("name") as string)?.trim();
+    const tax_id = (formData.get("tax_id") as string)?.trim();
+    const address = (formData.get("address") as string)?.trim() || null;
+    const city = (formData.get("city") as string)?.trim() || null;
+    const postal_code = (formData.get("postal_code") as string)?.trim() || null;
+
+    if (!name) {
+      return { success: false, error: "El Nombre de la empresa es obligatorio" };
+    }
+    if (!tax_id) {
+      return { success: false, error: "El NIF/CIF es obligatorio" };
+    }
+
+    // Insertamos la empresa + membresía OWNER + ajustes visuales de forma atómica
+    const [nuevaEmpresa] = await db.transaction(async (tx) => {
+      const [company] = await tx
+        .insert(companies)
+        .values({ name, tax_id, address, city, postal_code })
+        .returning({ id: companies.id });
+
+      await tx.insert(company_members).values({
+        company_id: company.id,
+        user_id: user.id,
+        role: "OWNER",
+      });
+
+      await tx.insert(company_settings).values({
+        company_id: company.id,
+        theme_color: "#4f46e5",
+      });
+
+      return [company];
+    });
+
+    // La nueva empresa pasa a ser la activa
+    const cookieStore = await cookies();
+    cookieStore.set("active_company_id", nuevaEmpresa.id, {
+      path: "/",
+      maxAge: 60 * 60 * 24 * 365,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    });
+
+    // Audit log de creación
+    await db.insert(audit_logs).values({
+      company_id: nuevaEmpresa.id,
+      user_id: user.id,
+      event_code: "COMPANY_CREATED",
+      description: `Creación de la empresa ${name} (${tax_id})`,
+    });
+
+    revalidatePath("/(dashboard)", "layout");
+    revalidatePath("/empresas");
+
+    return { success: true, companyId: nuevaEmpresa.id };
+  } catch (err: any) {
+    // Código 23505 = violación de unicidad (tax_id duplicado)
+    if (err?.code === "23505") {
+      return { success: false, error: "Ya existe una empresa con ese NIF/CIF." };
+    }
+    return { success: false, error: err?.message || "Error al crear la empresa" };
+  }
 }
 
 // 3. Server action para cambiar la empresa activa desde el selector

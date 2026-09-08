@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
-import { invoices, company_members, customers } from "@/db/schema";
+import { invoices, customers } from "@/db/schema";
 import { eq, and, ilike, gte, lte, desc, or } from "drizzle-orm";
+import { getActiveCompanyId } from "@/actions/company.actions";
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,13 +14,10 @@ export async function GET(request: NextRequest) {
       return new NextResponse("No autorizado", { status: 401 });
     }
 
-    const [member] = await db
-      .select({ company_id: company_members.company_id })
-      .from(company_members)
-      .where(eq(company_members.user_id, user.id))
-      .limit(1);
-
-    if (!member) {
+    let companyId: string;
+    try {
+      companyId = await getActiveCompanyId();
+    } catch {
       return new NextResponse("Empresa no encontrada", { status: 404 });
     }
 
@@ -30,7 +28,7 @@ export async function GET(request: NextRequest) {
     const fechaDesde = searchParams.get("from") || "";
     const fechaHasta = searchParams.get("to") || "";
 
-    const conditions = [eq(invoices.company_id, member.company_id)];
+    const conditions = [eq(invoices.company_id, companyId)];
 
     if (busqueda.trim()) {
       const term = `%${busqueda.trim()}%`;

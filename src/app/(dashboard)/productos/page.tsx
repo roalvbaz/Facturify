@@ -1,8 +1,9 @@
 import { db } from '@/db';
-import { products, company_members } from '@/db/schema';
+import { products } from '@/db/schema';
 import { createClient } from '@/lib/supabase/server';
 import { eq, and, ilike, desc } from 'drizzle-orm';
 import { createProductAction } from '@/actions/product.actions';
+import { getActiveCompanyId } from '@/actions/company.actions';
 import DeleteProductButton from '@/components/deleteProductButton';
 import { redirect } from 'next/navigation';
 
@@ -21,16 +22,8 @@ export default async function ProductosPage({
     redirect('/login');
   }
 
-  // 2. Extracción de la empresa activa usando query builder directo (evita el error de db.query)
-  const [member] = await db
-    .select()
-    .from(company_members)
-    .where(eq(company_members.user_id, user.id))
-    .limit(1);
-
-  if (!member) {
-    redirect('/login');
-  }
+  // 2. Empresa activa del usuario
+  const companyId = await getActiveCompanyId();
 
   // 3. Consulta de los productos protegida por el company_id
   const items = await db
@@ -39,10 +32,10 @@ export default async function ProductosPage({
     .where(
       q
         ? and(
-            eq(products.company_id, member.company_id),
+            eq(products.company_id, companyId),
             ilike(products.name, `%${q}%`)
           )
-        : eq(products.company_id, member.company_id)
+        : eq(products.company_id, companyId)
     )
     .orderBy(desc(products.created_at));
 

@@ -1,8 +1,9 @@
 import { db } from '@/db';
-import { expenses, companies, company_members } from '@/db/schema';
+import { expenses } from '@/db/schema';
 import { eq, desc, and, gte, lte, ilike, or } from 'drizzle-orm';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import { getUserCompanies, getActiveCompanyId } from '@/actions/company.actions';
 import ExpensesClientView from '@/components/expensesClientView';
 
 export const dynamic = 'force-dynamic';
@@ -19,15 +20,12 @@ export default async function GastosPage({
 
   if (!user) redirect('/login');
 
-  const [membresia] = await db
-    .select({ companyId: companies.id, companyName: companies.name })
-    .from(company_members)
-    .innerJoin(companies, eq(company_members.company_id, companies.id))
-    .where(eq(company_members.user_id, user.id))
-    .limit(1);
+  const userCompanies = await getUserCompanies();
+  const activeCompanyId = await getActiveCompanyId();
+  const miEmpresa = userCompanies.find((c) => c.id === activeCompanyId);
 
-  if (!membresia) {
-    return <div style={{ padding: '3rem', textAlign: 'center' }}>Sin empresa asignada</div>;
+  if (!miEmpresa) {
+    redirect('/empresas');
   }
 
   const busqueda = resolvedParams.q || '';
@@ -35,7 +33,7 @@ export default async function GastosPage({
   const from = resolvedParams.from || '';
   const to = resolvedParams.to || '';
 
-  const conditions = [eq(expenses.company_id, membresia.companyId)];
+  const conditions = [eq(expenses.company_id, activeCompanyId)];
 
   if (busqueda.trim()) {
     const term = `%${busqueda.trim()}%`;
@@ -61,7 +59,7 @@ export default async function GastosPage({
   return (
     <ExpensesClientView
       gastos={listaGastos}
-      companyName={membresia.companyName}
+      companyName={miEmpresa.name}
       stats={{ totalBase, totalIva, totalGasto, count: listaGastos.length }}
       filtros={{ busqueda, categoria, from, to }}
     />

@@ -1,9 +1,10 @@
 import { db } from '@/db';
-import { invoices, invoice_lines, companies, company_members, customers, company_settings } from '@/db/schema';
+import { invoices, invoice_lines, customers, company_settings } from '@/db/schema';
 import { eq, desc, and, ilike, gte, lte, or } from 'drizzle-orm';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
+import { getUserCompanies, getActiveCompanyId } from '@/actions/company.actions';
 import InvoicesTableClient from '@/components/invoiceTableClient';
 
 export const dynamic = 'force-dynamic';
@@ -23,30 +24,13 @@ export default async function HistorialPage({
     redirect('/login');
   }
 
-  const membresia = await db
-    .select({
-      companyId: companies.id,
-      companyName: companies.name,
-      NIF: companies.tax_id,
-      address: companies.address,
-    })
-    .from(company_members)
-    .innerJoin(companies, eq(company_members.company_id, companies.id))
-    .where(eq(company_members.user_id, user.id))
-    .limit(1);
-
-  const miEmpresa = membresia[0];
+  const userCompanies = await getUserCompanies();
+  const activeCompanyId = await getActiveCompanyId();
+  const miEmpresa = userCompanies.find((c) => c.id === activeCompanyId);
 
   if (!miEmpresa) {
-    return (
-      <div style={{ padding: '3rem', textAlign: 'center' }}>
-        <h2>Sin empresa asignada</h2>
-        <p>Tu usuario no tiene ninguna empresa asociada para ver el historial.</p>
-      </div>
-    );
+    redirect('/empresas');
   }
-
-  const activeCompanyId = miEmpresa.companyId;
   const busqueda = resolvedSearchParams.q || '';
   const estadoFiltro = resolvedSearchParams.status || 'Todas';
   const serieFiltro = resolvedSearchParams.series || 'Todas';
@@ -119,9 +103,9 @@ export default async function HistorialPage({
     .orderBy(desc(invoices.issued_at));
 
   const empresa = {
-    id: miEmpresa.companyId,
-    name: miEmpresa.companyName,
-    nif: miEmpresa.NIF,
+    id: miEmpresa.id,
+    name: miEmpresa.name,
+    nif: miEmpresa.tax_id,
     address: miEmpresa.address,
     theme_color: settings?.theme_color || '#4f46e5',
     logo_url: settings?.logo_url || null,
@@ -147,7 +131,7 @@ export default async function HistorialPage({
       <div className="header-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.25rem' }}>
         <div>
           <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-color)', margin: '0 0 2px 0' }}>
-            Historial de Facturas - {miEmpresa.companyName}
+            Historial de Facturas - {miEmpresa.name}
           </h2>
           <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
             Consulta, busca por referencia o cliente, filtra y exporta tus facturas ordinarias y rectificativas.

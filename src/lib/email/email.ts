@@ -109,6 +109,79 @@ export async function sendInvoiceEmail({
   }
 }
 
+interface SendWelcomeEmailParams {
+  to: string;
+  setupLink: string; // Enlace para acceder/crear la cuenta
+}
+
+export async function sendWelcomeEmail({
+  to,
+  setupLink,
+}: SendWelcomeEmailParams) {
+  try {
+    const subject = '¡Bienvenido/a a FacturON! Crea tu cuenta';
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; color: #1e293b; }
+            .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 10px; padding: 30px; border: 1px solid #e2e8f0; }
+            .header { text-align: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 20px; }
+            .title { font-size: 22px; font-weight: 800; color: #0f172a; margin: 0; }
+            .subtitle { font-size: 13px; color: #64748b; margin-top: 4px; }
+            .content { font-size: 14px; line-height: 1.6; color: #334155; }
+            .cta { display: block; text-align: center; margin: 24px 0; }
+            .btn { display: inline-block; background-color: #0ea5e9; color: #ffffff !important; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: 700; font-size: 15px; }
+            .footer { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 15px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 class="title">¡Bienvenido/a a FacturON!</h1>
+              <p class="subtitle">Tu plataforma de facturación electrónica (Veri*factu)</p>
+            </div>
+            <div class="content">
+              <p>Hola,</p>
+              <p>Gracias por registrarte en <strong>FacturON</strong>. Estamos encantados de darte la bienvenida.</p>
+              <p>Para completar la creación de tu cuenta, pulsa el siguiente botón:</p>
+
+              <div class="cta">
+                <a class="btn" href="${setupLink}" target="_blank">Acceder a mi cuenta</a>
+              </div>
+
+              <p style="font-size: 13px; color: #64748b;">
+                Si el botón no funciona, copia y pega este enlace en tu navegador:<br/>
+                <span style="color: #0ea5e9; word-break: break-all;">${setupLink}</span>
+              </p>
+            </div>
+            <div class="footer">
+              Enviado automáticamente por FacturON. Si no has solicitado esta cuenta, ignora este mensaje.
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const mailOptions: SendMailOptions = {
+      from: `"FacturON" <${process.env.EMAIL_USER}>`,
+      to: to.trim(),
+      subject,
+      html: htmlContent,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    return { success: true, data: info };
+
+  } catch (error: any) {
+    console.error('❌ Error enviando email de bienvenida:', error);
+    return { success: false, error: error.message || 'Error al enviar el correo de bienvenida' };
+  }
+}
+
 interface SendPaymentReminderParams {
   to: string;
   clientName: string;

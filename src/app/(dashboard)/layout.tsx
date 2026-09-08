@@ -1,8 +1,6 @@
 import Sidebar from '@/components/sidebar';
 import { createClient } from '@/lib/supabase/server';
-import { db } from '@/db';
-import { companies, company_members } from '@/db/schema';
-import { eq } from 'drizzle-orm';
+import { getUserCompanies, getActiveCompanyId } from '@/actions/company.actions';
 import { redirect } from 'next/navigation';
 
 export default async function DashboardLayout({
@@ -18,24 +16,27 @@ export default async function DashboardLayout({
     redirect('/login');
   }
 
-  // 2. Buscamos la empresa UNA SOLA VEZ
-  let nombreEmpresa = "Empresa no asignada";
-  
-  const membresia = await db
-    .select({ companyName: companies.name })
-    .from(company_members)
-    .innerJoin(companies, eq(company_members.company_id, companies.id))
-    .where(eq(company_members.user_id, user.id))
-    .limit(1);
+  // 2. Empresas del usuario (para el selector) y empresa activa
+  const companies = await getUserCompanies();
 
-  if (membresia.length > 0) {
-    nombreEmpresa = membresia[0].companyName;
+  // Si el usuario aún no tiene ninguna empresa, le llevamos al onboarding
+  if (companies.length === 0) {
+    redirect('/empresas');
   }
+
+  const activeCompanyId = await getActiveCompanyId();
+  const activeCompany = companies.find((c) => c.id === activeCompanyId);
+  const nombreEmpresa = activeCompany?.name || 'Empresa no asignada';
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f1f5f9' }}>
       {/* Pasamos los datos como props al Sidebar de Cliente */}
-      <Sidebar nombreEmpresa={nombreEmpresa} emailUsuario={user.email || 'Usuario'} />
+      <Sidebar
+        companies={companies}
+        activeCompanyId={activeCompanyId}
+        nombreEmpresa={nombreEmpresa}
+        emailUsuario={user.email || 'Usuario'}
+      />
       <main style={{ flexGrow: 1, padding: '2rem', height: '100vh', overflowY: 'auto' }}>
         {children}
       </main>

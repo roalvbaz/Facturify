@@ -29,5 +29,12 @@ export const LoginSchema = z.object({
   recaptchaToken: z.string().min(1, 'Por favor, completa la verificación de reCAPTCHA'),
 });
 
+// Esquema para el Registro inicial (creación de cuenta)
+export const RegisterSchema = z.object({
+  email: z.string().email('Formato de email inválido'),
+  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
+  recaptchaToken: z.string().min(1, 'Por favor, completa la verificación de reCAPTCHA'),
+});
+
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type EmitInvoiceInput = z.infer<typeof EmitInvoiceSchema>;

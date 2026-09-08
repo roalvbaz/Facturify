@@ -1,10 +1,11 @@
 'use server';
 
 import { db } from '@/db';
-import { customers, company_members } from '@/db/schema';
+import { customers } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { getActiveCompanyId } from '@/actions/company.actions';
 export async function deleteCustomerAction(customerId: string) {
   try {
     const supabase = await createClient();
@@ -14,15 +15,7 @@ export async function deleteCustomerAction(customerId: string) {
       return { success: false, error: 'No autorizado' };
     }
 
-    const [membresia] = await db
-      .select({ companyId: company_members.company_id })
-      .from(company_members)
-      .where(eq(company_members.user_id, user.id))
-      .limit(1);
-
-    if (!membresia) {
-      return { success: false, error: 'No tienes una empresa asignada.' };
-    }
+    const companyId = await getActiveCompanyId();
 
     await db
       .update(customers)
@@ -30,7 +23,7 @@ export async function deleteCustomerAction(customerId: string) {
       .where(
         and(
           eq(customers.id, customerId),
-          eq(customers.company_id, membresia.companyId)
+          eq(customers.company_id, companyId)
         )
       );
 
@@ -49,13 +42,7 @@ export async function createCustomerAction(formData: FormData) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("No autenticado");
 
-    const [member] = await db
-      .select()
-      .from(company_members)
-      .where(eq(company_members.user_id, user.id))
-      .limit(1);
-
-    if (!member) throw new Error("Empresa no encontrada");
+    const companyId = await getActiveCompanyId();
 
     const name = (formData.get("name") as string)?.trim();
     const tax_id = (formData.get("tax_id") as string)?.trim() || "";
@@ -67,7 +54,7 @@ export async function createCustomerAction(formData: FormData) {
     }
 
     await db.insert(customers).values({
-      company_id: member.company_id,
+      company_id: companyId,
       name,
       tax_id,
       email,

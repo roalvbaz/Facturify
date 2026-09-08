@@ -1,10 +1,11 @@
 'use server';
 
 import { db } from '@/db';
-import { expenses, companies, company_members } from '@/db/schema';
+import { expenses } from '@/db/schema';
 import { eq, and, desc, gte, lte, ilike, or } from 'drizzle-orm';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { getActiveCompanyId } from '@/actions/company.actions';
 
 export async function createExpenseAction(formData: FormData) {
   try {
@@ -12,13 +13,7 @@ export async function createExpenseAction(formData: FormData) {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('No autorizado');
 
-    const [membresia] = await db
-      .select({ companyId: company_members.company_id })
-      .from(company_members)
-      .where(eq(company_members.user_id, user.id))
-      .limit(1);
-
-    if (!membresia) throw new Error('Empresa no encontrada');
+    const companyId = await getActiveCompanyId();
 
     const supplier_name = (formData.get('supplier_name') as string)?.trim();
     const supplier_tax_id = (formData.get('supplier_tax_id') as string)?.trim() || null;
@@ -46,7 +41,7 @@ export async function createExpenseAction(formData: FormData) {
     const receiptFile = formData.get('receipt') as File | null;
     if (receiptFile && receiptFile.size > 0) {
       const ext = receiptFile.name.split('.').pop();
-      const filename = `${membresia.companyId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
+      const filename = `${companyId}/${Date.now()}_${Math.random().toString(36).substring(7)}.${ext}`;
       
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from('receipts')
@@ -63,7 +58,7 @@ export async function createExpenseAction(formData: FormData) {
     const expense_date = expense_date_str ? new Date(expense_date_str) : new Date();
 
     await db.insert(expenses).values({
-      company_id: membresia.companyId,
+      company_id: companyId,
       supplier_name,
       supplier_tax_id,
       invoice_reference,

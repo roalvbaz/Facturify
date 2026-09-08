@@ -1,8 +1,9 @@
 import { db } from "@/db";
-import { companies, company_members, company_settings } from "@/db/schema";
+import { companies, company_settings } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
+import { getUserCompanies, getActiveCompanyId } from "@/actions/company.actions";
 import ConfigForm from "./configForm";
 
 export default async function ConfiguracionPage() {
@@ -10,11 +11,13 @@ export default async function ConfiguracionPage() {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect("/login");
 
-  const [member] = await db.select().from(company_members).where(eq(company_members.user_id, user.id)).limit(1);
-  if (!member) redirect("/login");
+  const userCompanies = await getUserCompanies();
+  if (userCompanies.length === 0) redirect("/empresas");
 
-  const [company] = await db.select().from(companies).where(eq(companies.id, member.company_id)).limit(1);
-  const [settings] = await db.select().from(company_settings).where(eq(company_settings.company_id, member.company_id)).limit(1);
+  const activeCompanyId = await getActiveCompanyId();
+
+  const [company] = await db.select().from(companies).where(eq(companies.id, activeCompanyId)).limit(1);
+  const [settings] = await db.select().from(company_settings).where(eq(company_settings.company_id, activeCompanyId)).limit(1);
 
   const mergedData = { ...company, ...settings };
 

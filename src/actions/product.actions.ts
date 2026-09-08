@@ -1,35 +1,11 @@
 "use server";
 
 import { db } from "@/db";
-import { products, company_members } from "@/db/schema";
-import { createClient } from "@/lib/supabase/server";
+import { products } from "@/db/schema";
 import { eq, and, ilike, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { getActiveCompanyId } from "@/actions/company.actions";
 
-async function getActiveCompanyId() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    throw new Error("No autenticado");
-  }
-
-  // Consulta directa sin depender de db.query
-  const [member] = await db
-    .select()
-    .from(company_members) // o companyMembers según como lo tengas importado de @/db/schema
-    .where(eq(company_members.user_id, user.id))
-    .limit(1);
-
-  if (!member) {
-    throw new Error("Empresa no encontrada para el usuario activo");
-  }
-
-  return member.company_id;
-}
 export async function getCompanyProductsAction(q?: string) {
   try {
     const companyId = await getActiveCompanyId();

@@ -1,8 +1,9 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { db } from '@/db';
-import { companies, company_members, invoices, customers } from '@/db/schema';
+import { invoices, customers } from '@/db/schema';
 import { eq, desc } from 'drizzle-orm';
+import { getUserCompanies, getActiveCompanyId } from '@/actions/company.actions';
 import IngresosChart from '@/components/ingresosChart';
 import Link from 'next/link';
 
@@ -19,36 +20,16 @@ export default async function DashboardPage() {
   }
 
   // 2. Obtener empresa activa del usuario
-  const membresia = await db
-    .select({
-      companyId: companies.id,
-      companyName: companies.name,
-      role: company_members.role,
-    })
-    .from(company_members)
-    .innerJoin(companies, eq(company_members.company_id, companies.id))
-    .where(eq(company_members.user_id, user.id))
-    .limit(1);
+  const userCompanies = await getUserCompanies();
 
-  const miEmpresa = membresia[0];
-
-  if (!miEmpresa) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', textAlign: 'center' }}>
-        <div style={{ fontSize: '4rem', color: '#94a3b8', marginBottom: '1.5rem' }}>
-          <i className="fas fa-lock"></i>
-        </div>
-        <h2 style={{ fontSize: '2rem', fontWeight: 800, color: 'var(--text-color)', margin: '0 0 1rem 0' }}>
-          Cuenta en revisión
-        </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '1.1rem', maxWidth: '500px', lineHeight: 1.6 }}>
-          Tu usuario (<strong>{user.email}</strong>) se ha autenticado correctamente, pero aún no está vinculado a ninguna empresa en el sistema.
-        </p>
-      </div>
-    );
+  if (userCompanies.length === 0) {
+    redirect('/empresas');
   }
 
-  const companyId = miEmpresa.companyId;
+  const activeCompanyId = await getActiveCompanyId();
+  const miEmpresa = userCompanies.find((c) => c.id === activeCompanyId) || userCompanies[0];
+
+  const companyId = miEmpresa.id;
 
   // 3. Consultar facturas de la empresa
   const facturas = await db
@@ -151,7 +132,7 @@ export default async function DashboardPage() {
     <div>
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-color)', margin: '0 0 0.35rem 0' }}>
-          Resumen Financiero - {miEmpresa.companyName}
+          Resumen Financiero - {miEmpresa.name}
         </h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
           Métricas e ingresos de tu empresa en tiempo real (Rol: {miEmpresa.role}).

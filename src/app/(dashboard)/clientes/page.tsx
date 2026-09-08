@@ -1,10 +1,11 @@
 import { db } from '@/db';
-import { customers, companies, company_members } from '@/db/schema';
+import { customers } from '@/db/schema';
 import { eq, and, or, ilike, desc } from 'drizzle-orm';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import DeleteCustomerButton from '@/components/deleteCustomerButton';
 import { createCustomerAction } from '@/actions/customer.actions';
+import { getUserCompanies, getActiveCompanyId } from '@/actions/company.actions';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
@@ -24,28 +25,13 @@ export default async function ClientesPage({
     redirect('/login');
   }
 
-  const membresia = await db
-    .select({
-      companyId: companies.id,
-      companyName: companies.name,
-    })
-    .from(company_members)
-    .innerJoin(companies, eq(company_members.company_id, companies.id))
-    .where(eq(company_members.user_id, user.id))
-    .limit(1);
-
-  const miEmpresa = membresia[0];
+  const userCompanies = await getUserCompanies();
+  const activeCompanyId = await getActiveCompanyId();
+  const miEmpresa = userCompanies.find((c) => c.id === activeCompanyId);
 
   if (!miEmpresa) {
-    return (
-      <div style={{ padding: '3rem', textAlign: 'center' }}>
-        <h2>Sin empresa asignada</h2>
-        <p>Tu usuario no tiene ninguna empresa asociada para ver los clientes.</p>
-      </div>
-    );
+    redirect('/empresas');
   }
-
-  const activeCompanyId = miEmpresa.companyId;
   const busqueda = resolvedSearchParams.q || '';
 
   const conditions = [
@@ -82,7 +68,7 @@ export default async function ClientesPage({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-color)', margin: '0 0 2px 0' }}>
-            Directorio de Clientes - {miEmpresa.companyName}
+            Directorio de Clientes - {miEmpresa.name}
           </h2>
           <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
             Consulta, busca y gestiona los clientes registrados en tu empresa.

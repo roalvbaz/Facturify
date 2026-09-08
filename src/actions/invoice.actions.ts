@@ -1,10 +1,11 @@
 'use server';
 
 import { db } from '@/db';
-import { invoices, invoice_lines, companies, company_members, customers, audit_logs } from '@/db/schema';
+import { invoices, invoice_lines, customers, audit_logs } from '@/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { getUserCompanies, getActiveCompanyId } from '@/actions/company.actions';
 import crypto from 'crypto';
 import { sendInvoiceEmail } from '@/lib/email/email';
 
@@ -98,23 +99,15 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
       }
     }
 
-    const [membresia] = await db
-      .select({
-        companyId: companies.id,
-        companyName: companies.name,
-        taxId: companies.tax_id,
-      })
-      .from(company_members)
-      .innerJoin(companies, eq(company_members.company_id, companies.id))
-      .where(eq(company_members.user_id, user.id))
-      .limit(1);
+    const userCompanies = await getUserCompanies();
 
-    if (!membresia) {
+    if (userCompanies.length === 0) {
       throw new Error("El usuario no tiene ninguna empresa asociada.");
     }
 
-    const activeCompanyId = membresia.companyId;
-    const issuerTaxId = membresia.taxId || "A00000000";
+    const activeCompanyId = await getActiveCompanyId();
+    const membre = userCompanies.find((c) => c.id === activeCompanyId) || userCompanies[0];
+    const issuerTaxId = membre.tax_id || "A00000000";
 
     const clientName = payload.customerData?.nombre || 'Cliente General';
     const clientTaxId = payload.customerData?.nif || '';
@@ -290,7 +283,7 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
           clientName: clientName,
           invoiceNumber: formattedInvoiceNumber,
           totalEur: (totalCents / 100).toFixed(2),
-          companyName: membresia.companyName,
+          companyName: membre.name,
           pdfBase64: payload.pdfBase64,
         });
         emailSent = true;
@@ -333,21 +326,23 @@ export async function getActiveCompanyAction() {
       return { success: false, company: null };
     }
 
-    const membresia = await db
-      .select({
-        id: companies.id,
-        name: companies.name,
-        tax_id: companies.tax_id,
-        address: companies.address,
-      })
-      .from(company_members)
-      .innerJoin(companies, eq(company_members.company_id, companies.id))
-      .where(eq(company_members.user_id, user.id))
-      .limit(1);
+    const userCompanies = await getUserCompanies();
 
-    return { 
-      success: true, 
-      company: membresia[0] || null 
+    if (userCompanies.length === 0) {
+      return { success: false, company: null };
+    }
+
+    const activeCompanyId = await getActiveCompanyId();
+    const membre = userCompanies.find((c) => c.id === activeCompanyId) || userCompanies[0];
+
+    return {
+      success: true,
+      company: {
+        id: membre.id,
+        name: membre.name,
+        tax_id: membre.tax_id,
+        address: membre.address,
+      },
     };
   } catch (error: any) {
     console.error("❌ ERROR AL OBTENER EMPRESA ACTIVA:", error);
@@ -364,15 +359,7 @@ export async function getCompanyCustomersAction() {
       return { success: false, customers: [] };
     }
 
-    const [membresia] = await db
-      .select({ companyId: company_members.company_id })
-      .from(company_members)
-      .where(eq(company_members.user_id, user.id))
-      .limit(1);
-
-    if (!membresia) {
-      return { success: false, customers: [] };
-    }
+    const companyId = await getActiveCompanyId();
 
     const clientList = await db
       .select({
@@ -383,7 +370,7 @@ export async function getCompanyCustomersAction() {
         address: customers.address,
       })
       .from(customers)
-      .where(eq(customers.company_id, membresia.companyId))
+      .where(eq(customers.company_id, companyId))
       .orderBy(customers.name);
 
     return { success: true, customers: clientList };
