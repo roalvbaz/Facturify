@@ -88,10 +88,24 @@ export default function EmpresasManager({
                     justifyContent: 'space-between',
                     gap: '1rem',
                     padding: '1rem 1.25rem',
-                    borderRadius: '10px',
+                    borderRadius: '12px',
                     border: isActive ? '1px solid #0ea5e9' : '1px solid var(--border-color)',
                     backgroundColor: isActive ? 'rgba(14,165,233,0.06)' : 'var(--bg-color)',
+                    boxShadow: isActive ? '0 2px 10px rgba(14,165,233,0.12)' : 'var(--shadow-sm)',
                     flexWrap: 'wrap',
+                    transition: 'all 0.2s ease',
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.borderColor = '#bae6fd';
+                      e.currentTarget.style.boxShadow = '0 2px 8px rgba(15,23,42,0.06)';
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.borderColor = 'var(--border-color)';
+                      e.currentTarget.style.boxShadow = 'var(--shadow-sm)';
+                    }
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '12px', minWidth: 0 }}>
@@ -104,7 +118,7 @@ export default function EmpresasManager({
                           {c.name}
                         </strong>
                         {isActive && (
-                          <span style={{ fontSize: '0.65rem', fontWeight: 700, padding: '2px 8px', borderRadius: '999px', backgroundColor: '#0ea5e9', color: 'white' }}>
+                          <span style={{ fontSize: '0.62rem', fontWeight: 700, padding: '3px 9px', borderRadius: '999px', backgroundColor: 'rgba(14,165,233,0.12)', color: '#0284c7', letterSpacing: '0.04em' }}>
                             ACTIVA
                           </span>
                         )}
@@ -122,9 +136,34 @@ export default function EmpresasManager({
                       type="button"
                       disabled={isPending && pendingId === c.id}
                       onClick={() => activate(c.id)}
-                      className="btn"
-                      style={{ fontSize: '0.8rem', fontWeight: 600, padding: '0.4rem 0.9rem', cursor: 'pointer', opacity: isPending && pendingId === c.id ? 0.6 : 1 }}
+                      style={{
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        padding: '0.5rem 1rem',
+                        cursor: 'pointer',
+                        opacity: isPending && pendingId === c.id ? 0.6 : 1,
+                        backgroundColor: 'transparent',
+                        color: '#0284c7',
+                        border: '1px solid #38bdf8',
+                        borderRadius: '10px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        transition: 'all 0.2s ease',
+                        boxShadow: '0 1px 2px rgba(2,132,199,0.1)',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.backgroundColor = '#0ea5e9';
+                        e.currentTarget.style.color = 'white';
+                        e.currentTarget.style.borderColor = '#0ea5e9';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.color = '#0284c7';
+                        e.currentTarget.style.borderColor = '#38bdf8';
+                      }}
                     >
+                      <i className="fas fa-arrow-right" style={{ fontSize: '0.7rem' }}></i>
                       {isPending && pendingId === c.id ? 'Activando...' : 'Usar empresa'}
                     </button>
                   )}

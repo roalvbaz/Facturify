@@ -13,3 +13,6 @@ build/
 build
 .next/
 .next
+.claude
+.github
+drizzle

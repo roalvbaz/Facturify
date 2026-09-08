@@ -47,29 +47,6 @@ export default function CompanySelector({
           ))}
         </select>
       </div>
-
-      <button
-        type="button"
-        onClick={() => router.push('/empresas?nueva=1')}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '6px',
-          width: '100%',
-          padding: '7px',
-          backgroundColor: 'transparent',
-          color: '#7dd3fc',
-          border: '1px dashed #475569',
-          borderRadius: '8px',
-          cursor: 'pointer',
-          fontSize: '0.75rem',
-          fontWeight: 600,
-          transition: 'all 0.2s',
-        }}
-      >
-        <i className="fas fa-plus" style={{ fontSize: '0.7rem' }}></i> Nueva Empresa
-      </button>
     </div>
   );
 }
