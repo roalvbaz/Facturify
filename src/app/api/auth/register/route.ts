@@ -84,10 +84,15 @@ export async function POST(request: NextRequest) {
     }
 
     // 4. Consumir la invitación (un solo uso)
-    await db
-      .update(invitations)
-      .set({ status: 'REGISTRADA', responded_at: new Date() })
-      .where(eq(invitations.id, invitation.id));
+    try {
+      await db
+        .update(invitations)
+        .set({ status: 'REGISTRADA', responded_at: new Date() })
+        .where(eq(invitations.id, invitation.id));
+    } catch (updateErr) {
+      console.error('⚠️ Error actualizando estado de invitación:', updateErr);
+      // No devolvemos error: la cuenta ya está creada y la contraseña fijada.
+    }
 
     // 5. Iniciar sesión y devolver las cookies de sesión
     let response = NextResponse.json({ success: true });
@@ -124,11 +129,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    await db.insert(audit_logs).values({
-      user_id: signInData.user.id,
-      event_code: 'USER_REGISTERED',
-      description: `El usuario ${invitation.email} completó su registro a través de la invitación`,
-    });
+    // Registrar en auditoría (no crítico: si la tabla no existe o falla, no rompemos el registro)
+    try {
+      await db.insert(audit_logs).values({
+        user_id: signInData.user.id,
+        event_code: 'USER_REGISTERED',
+        description: `El usuario ${invitation.email} completó su registro a través de la invitación`,
+      });
+    } catch (auditErr) {
+      console.warn('⚠️ No se pudo registrar auditoría ( tabla audit_logs puede no existir):', auditErr);
+    }
 
     const finalResponse = NextResponse.json({ success: true });
 
