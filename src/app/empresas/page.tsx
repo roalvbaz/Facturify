@@ -5,6 +5,10 @@ import EmpresasManager from '@/components/empresasManager';
 
 export const dynamic = 'force-dynamic';
 
+// Fuera del layout (dashboard) a propósito: aquí llegan los usuarios nuevos
+// sin ninguna empresa para crear la primera (onboarding). Si viviéramos dentro
+// del layout del dashboard, su redirect() a /empresas cuando no hay empresas
+// provocaría un bucle infinito de redirecciones y la página nunca se mostraría.
 export default async function EmpresasPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -22,7 +26,7 @@ export default async function EmpresasPage() {
   }
 
   return (
-    <div style={{ maxWidth: "800px", margin: "0 auto", paddingBottom: "2rem" }}>
+    <div style={{ maxWidth: "800px", margin: "0 auto", paddingBottom: "2rem", paddingTop: "2rem" }}>
       <div style={{ marginBottom: "1.5rem" }}>
         <h2 style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--text-color)", margin: "0 0 2px 0" }}>
           Mis Empresas
