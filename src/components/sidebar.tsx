@@ -117,9 +117,6 @@ export default function Sidebar({
             <i className="fas fa-envelope-open-text" style={{ width: '20px', textAlign: 'center' }}></i> Invitaciones
           </Link>
         )}
-        <Link href="/perfil" style={linkStyle(isActive('/perfil'))}>
-          <i className="fas fa-user-circle" style={{ width: '20px', textAlign: 'center' }}></i> Mi Perfil
-        </Link>
       </nav>
 
       {/* 3. Pie del Sidebar */}
