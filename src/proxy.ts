@@ -50,6 +50,7 @@ export async function proxy(request: NextRequest) {
   // Rutas accesibles SIN sesión:
   // - /login (página de acceso)
   // - /recuperar-password (página de recuperación)
+  // - /registro (página pública de registro: solo valida las invitaciones ?invite=...)
   // - /api/auth/* (login y canje del código del correo: todavía no hay cookie)
   // - /api/cron/* (disparado por un cron externo, sin cookies de usuario)
   // - /api/admin/* (lo llama el backend de la web de marketing; se protege
@@ -57,6 +58,7 @@ export async function proxy(request: NextRequest) {
   const isPublicRoute =
     pathname.startsWith('/login') ||
     pathname.startsWith('/recuperar-password') ||
+    pathname.startsWith('/registro') ||
     pathname.startsWith('/api/auth/') ||
     pathname.startsWith('/api/cron/') ||
     pathname.startsWith('/api/admin/');

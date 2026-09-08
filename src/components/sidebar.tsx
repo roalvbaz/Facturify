@@ -10,11 +10,13 @@ export default function Sidebar({
   activeCompanyId,
   nombreEmpresa,
   emailUsuario,
+  isAdmin,
 }: {
   companies: Array<{ id: string; name: string; tax_id: string; role: string }>;
   activeCompanyId: string;
   nombreEmpresa: string;
   emailUsuario: string;
+  isAdmin?: boolean;
 }) {
   const pathname = usePathname();
 
@@ -109,6 +111,14 @@ export default function Sidebar({
         </Link>
         <Link href="/empresas" style={linkStyle(isActive('/empresas'))}>
           <i className="fas fa-building" style={{ width: '20px', textAlign: 'center' }}></i> Mis Empresas
+        </Link>
+        {isAdmin && (
+          <Link href="/invitaciones" style={linkStyle(isActive('/invitaciones'))}>
+            <i className="fas fa-envelope-open-text" style={{ width: '20px', textAlign: 'center' }}></i> Invitaciones
+          </Link>
+        )}
+        <Link href="/perfil" style={linkStyle(isActive('/perfil'))}>
+          <i className="fas fa-user-circle" style={{ width: '20px', textAlign: 'center' }}></i> Mi Perfil
         </Link>
       </nav>
 

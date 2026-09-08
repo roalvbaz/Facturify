@@ -1,6 +1,7 @@
 import Sidebar from '@/components/sidebar';
 import { createClient } from '@/lib/supabase/server';
 import { getUserCompanies, getActiveCompanyId } from '@/actions/company.actions';
+import { isAdminUser } from '@/lib/invitations';
 import { redirect } from 'next/navigation';
 
 export default async function DashboardLayout({
@@ -36,6 +37,7 @@ export default async function DashboardLayout({
         activeCompanyId={activeCompanyId}
         nombreEmpresa={nombreEmpresa}
         emailUsuario={user.email || 'Usuario'}
+        isAdmin={isAdminUser(user.email)}
       />
       <main style={{ flexGrow: 1, padding: '2rem', height: '100vh', overflowY: 'auto' }}>
         {children}

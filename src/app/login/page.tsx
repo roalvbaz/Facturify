@@ -133,7 +133,7 @@ export default function LoginPage() {
         </form>
 
         <div style={{ textAlign: 'center', marginTop: '2rem', fontSize: '0.875rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.5rem' }}>
-          <p style={{ color: '#64748b', margin: 0 }}>¿Aún no tienes cuenta? <a href="mailto:soporte.facturon@gmail.com" style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 800 }}>Contacta con nosotros</a></p>
+          <p style={{ color: '#64748b', margin: 0 }}>¿Aún no tienes cuenta? Escríbenos a <a href="mailto:soporte.facturon@gmail.com" style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 800 }}>soporte.facturon@gmail.com</a> y te enviaremos un enlace para crear tu perfil.</p>
         </div>
       </div>
     </div>

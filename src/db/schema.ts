@@ -9,6 +9,7 @@ import {
   numeric,
   uuid,
   uniqueIndex,
+  index,
 } from 'drizzle-orm/pg-core';
 
 // ==========================================
@@ -272,6 +273,32 @@ export const company_settings = pgTable("company_settings", {
     .notNull(),
 });
 
+// ==========================================
+// 12. INVITACIONES DE REGISTRO (INVITATIONS)
+// ==========================================
+export const invitations = pgTable(
+  'invitations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    email: text('email').notNull(),
+    token: text('token').notNull(), // Token en claro del enlace (solo uso interno del admin para copiar el enlace)
+    token_hash: varchar('token_hash', { length: 64 }).notNull(), // SHA-256 del token del enlace de registro
+    user_id: uuid('user_id').notNull(), // Usuario de Supabase Auth creado para recibir este registro
+    status: varchar('status', { length: 32 }).notNull().default('ENVIADA'), // 'ENVIADA' | 'REGISTRADA' | 'CANCELADA'
+    expires_at: timestamp('expires_at').notNull(), // Caducidad del enlace de registro (7 días)
+    created_by: uuid('created_by'), // Quién creó la invitación (admin), null si vino del API de marketing
+    responded_at: timestamp('responded_at'), // Cuándo el invitado completó su registro
+    created_at: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    tokenHashIdx: uniqueIndex('invitations_token_hash_idx').on(table.token_hash),
+    emailStatusIdx: index('invitations_email_status_idx').on(
+      table.email,
+      table.status
+    ),
+  })
+);
+
 // Types inferidos
 export type CompanySettings = typeof company_settings.$inferSelect;
 export type Product = typeof products.$inferSelect;
@@ -280,3 +307,5 @@ export type Expense = typeof expenses.$inferSelect;
 export type NewExpense = typeof expenses.$inferInsert;
 export type Estimate = typeof estimates.$inferSelect;
 export type NewEstimate = typeof estimates.$inferInsert;
+export type Invitation = typeof invitations.$inferSelect;
+export type NewInvitation = typeof invitations.$inferInsert;

@@ -182,6 +182,83 @@ export async function sendWelcomeEmail({
   }
 }
 
+interface SendRegistrationInvitationEmailParams {
+  to: string;
+  registerLink: string; // Enlace a la página pública /registro?invite=...
+}
+
+export async function sendRegistrationInvitationEmail({
+  to,
+  registerLink,
+}: SendRegistrationInvitationEmailParams) {
+  try {
+    const subject = 'Tu acceso a FacturON está listo — Crea tu perfil';
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; color: #1e293b; }
+            .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 10px; padding: 30px; border: 1px solid #e2e8f0; }
+            .header { text-align: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 20px; }
+            .title { font-size: 22px; font-weight: 800; color: #0f172a; margin: 0; }
+            .subtitle { font-size: 13px; color: #64748b; margin-top: 4px; }
+            .content { font-size: 14px; line-height: 1.6; color: #334155; }
+            .cta { display: block; text-align: center; margin: 24px 0; }
+            .btn { display: inline-block; background-color: #0ea5e9; color: #ffffff !important; text-decoration: none; padding: 13px 28px; border-radius: 8px; font-weight: 700; font-size: 15px; }
+            .note { font-size: 12px; color: #94a3b8; background-color: #f8fafc; border-left: 3px solid #e2e8f0; padding: 10px 14px; border-radius: 6px; margin-top: 18px; }
+            .footer { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 15px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 class="title">¡Tu acceso a FacturON está listo!</h1>
+              <p class="subtitle">Facturación electrónica conforme al Reglamento Veri*factu</p>
+            </div>
+            <div class="content">
+              <p>Hola,</p>
+              <p>Hemos preparado tu acceso a <strong>FacturON</strong>. Solo tienes que entrar en la página de registro, crear tu perfil (nombre y contraseña) y configurar tu empresa.</p>
+
+              <div class="cta">
+                <a class="btn" href="${registerLink}" target="_blank">Crear mi perfil</a>
+              </div>
+
+              <p style="font-size: 13px; color: #64748b;">
+                Si el botón no funciona, copia y pega este enlace en tu navegador:<br/>
+                <span style="color: #0ea5e9; word-break: break-all;">${registerLink}</span>
+              </p>
+
+              <div class="note">
+                ⏳ El enlace caduca en <strong>7 días</strong>. Si caduca, solo tienes que escribirnos y te enviaremos uno nuevo.
+              </div>
+            </div>
+            <div class="footer">
+              Enviado automáticamente por FacturON. Si no solicitaste acceso a este programa, ignora este mensaje.
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const mailOptions: SendMailOptions = {
+      from: `"FacturON" <${process.env.EMAIL_USER}>`,
+      to: to.trim(),
+      subject,
+      html: htmlContent,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    return { success: true, data: info };
+
+  } catch (error: any) {
+    console.error('❌ Error enviando email de invitación de registro:', error);
+    return { success: false, error: error.message || 'Error al enviar el correo de registro' };
+  }
+}
+
 interface SendPaymentReminderParams {
   to: string;
   clientName: string;

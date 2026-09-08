@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { InviteSchema } from '@/lib/validations/invoice';
-import { createAdminClient } from '@/lib/supabase/admin';
-import { sendWelcomeEmail } from '@/lib/email/email';
+import { createInvitation } from '@/lib/invitations';
 
 export const dynamic = 'force-dynamic';
 
 /**
- * Crea una cuenta de usuario SOLO con el email y envía un enlace de registro.
+ * Crea una invitación de registro SOLO con el email y envía el enlace
+ * a la página pública de registro (/registro?invite=...).
  *
  * Llamado por el backend de la web de marketing:
  *   POST {SITE_URL}/api/admin/invite
@@ -15,8 +15,8 @@ export const dynamic = 'force-dynamic';
  *   Body:    { "email": "cliente@empresa.com" }
  *
  * Flujo del usuario invitado:
- *   clic en el enlace → /api/auth/callback → /actualizar-password → fija su contraseña
- *   → inicia sesión → /empresas (onboarding) → crea su empresa.
+ *   clic en el enlace → /registro → crea su perfil (nombre + contraseña)
+ *   → entra en la app → /empresas (onboarding) → crea su empresa.
  */
 export async function POST(request: NextRequest) {
   // 1. Guard de seguridad: secreto compartido con el backend que llama
@@ -56,55 +56,15 @@ export async function POST(request: NextRequest) {
 
   const { email } = parsed.data;
 
-  try {
-    const admin = createAdminClient();
+  const result = await createInvitation({ email, createdBy: null, sendEmail: true });
 
-    // 3. Crear el usuario solo con el email (sin contraseña)
-    const { error: createError } = await admin.auth.admin.createUser({
-      email,
-      email_confirm: true,
-    });
-
-    if (createError) {
-      const msg = (createError.message || '').toLowerCase();
-      if (msg.includes('already registered') || msg.includes('ya registrado')) {
-        return NextResponse.json(
-          { error: 'Este email ya tiene una cuenta registrada.' },
-          { status: 409 }
-        );
-      }
-      throw new Error(createError.message);
-    }
-
-    // 4. Generar el enlace de recuperación (mismo mecanismo que resetPasswordAction)
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-    const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
-      type: 'recovery',
-      email,
-      options: {
-        redirectTo: `${siteUrl}/api/auth/callback?next=/actualizar-password`,
-      },
-    });
-
-    if (linkError || !linkData?.properties?.action_link) {
-      throw new Error(linkError?.message || 'No se pudo generar el enlace de registro');
-    }
-
-    const setupLink = linkData.properties.action_link;
-
-    // 5. Enviar el email de bienvenida con el enlace
-    const mailResult = await sendWelcomeEmail({ to: email, setupLink });
-
-    return NextResponse.json({
-      success: true,
-      emailSent: mailResult.success,
-      ...(mailResult.success ? {} : { emailError: mailResult.error }),
-    });
-  } catch (error: any) {
-    console.error('❌ Error en /api/admin/invite:', error);
-    return NextResponse.json(
-      { error: error?.message || 'Error interno al crear la cuenta' },
-      { status: 500 }
-    );
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: 409 });
   }
+
+  return NextResponse.json({
+    success: true,
+    emailSent: result.emailSent,
+    ...(result.emailSent ? {} : { emailError: result.emailError }),
+  });
 }

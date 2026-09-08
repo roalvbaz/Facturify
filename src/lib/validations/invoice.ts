@@ -41,6 +41,20 @@ export const InviteSchema = z.object({
   email: z.string().email('Formato de email inválido'),
 });
 
+// Esquema para la página pública de registro (?invite=...): el invitado
+// crea su perfil (nombre) y fija su contraseña con reCAPTCHA.
+export const RegisterRequestSchema = z.object({
+  token: z.string().min(1, 'El enlace de invitación es necesario'),
+  fullName: z
+    .string()
+    .trim()
+    .min(1, 'El nombre es obligatorio')
+    .max(120, 'El nombre es demasiado largo'),
+  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
+  recaptchaToken: z.string().min(1, 'Por favor, completa la verificación de reCAPTCHA'),
+});
+
 export type LoginInput = z.infer<typeof LoginSchema>;
 export type InviteInput = z.infer<typeof InviteSchema>;
+export type RegisterRequestInput = z.infer<typeof RegisterRequestSchema>;
 export type EmitInvoiceInput = z.infer<typeof EmitInvoiceSchema>;
