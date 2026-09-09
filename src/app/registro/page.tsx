@@ -20,7 +20,7 @@ function StatusCard({
     <div className="login-page" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f1f5f9', padding: '2rem' }}>
       <div className="card login-card" style={{ maxWidth: '400px', width: '100%', padding: '2.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
-          <Image src="/img/banner.png" alt="FacturON Logo" width={280} height={65} priority style={{ objectFit: 'contain', maxWidth: '100%', height: 'auto' }} />
+          <Image src="/img/banner.png" alt="FacturON Logo" width={432} height={121} priority style={{ objectFit: 'contain', maxWidth: '100%', height: 'auto' }} />
         </div>
 
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>

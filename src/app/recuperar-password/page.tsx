@@ -47,8 +47,8 @@ export default function RecuperarPasswordPage() {
           <Image
             src="/img/banner.png"
             alt="FacturON Logo"
-            width={280}
-            height={65}
+            width={432}
+            height={121}
             priority
             style={{ objectFit: 'contain', maxWidth: '100%', height: 'auto' }}
           />
