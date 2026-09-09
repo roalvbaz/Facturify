@@ -43,7 +43,7 @@ export default function ConfigForm({ company }: { company: any }) {
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
       {/* Datos Fiscales */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+      <div className="responsive-grid">
         <div>
           <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: "0.4rem" }}>
             Razón Social / Nombre *
@@ -65,7 +65,7 @@ export default function ConfigForm({ company }: { company: any }) {
         <input type="text" name="address" defaultValue={company.address || ""} className="form-control" style={{ height: "38px", fontSize: "0.9rem", width: "100%" }} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
+      <div className="responsive-grid">
         <div>
           <label style={{ display: "block", fontSize: "0.75rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: "0.4rem" }}>
             Ciudad

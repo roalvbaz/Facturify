@@ -169,7 +169,7 @@ export default function InvoicesTableClient({
 
       {/* Tabla */}
       <div style={{ overflowX: 'auto', position: 'relative', zIndex: 10 }}>
-        <table className="data-table">
+        <table className="data-table mobile-card-table">
           <thead>
             <tr>
               {isColVisible('number') && <th>Nº Factura</th>}
@@ -197,7 +197,7 @@ export default function InvoicesTableClient({
               return (
                 <tr key={f.id}>
                   {isColVisible('number') && (
-                    <td>
+                    <td data-label="Nº Factura">
                       <strong style={{ color: 'var(--primary)', fontSize: '0.9rem' }}>
                         {f.formatted_number}
                       </strong>
@@ -205,7 +205,7 @@ export default function InvoicesTableClient({
                   )}
 
                   {isColVisible('client') && (
-                    <td>
+                    <td data-label="Cliente & NIF">
                       <div style={{ fontWeight: 600, color: 'var(--text-color)' }}>
                         {f.client_name || 'Cliente sin nombre'}
                       </div>
@@ -216,7 +216,7 @@ export default function InvoicesTableClient({
                   )}
 
                   {isColVisible('dates') && (
-                    <td>
+                    <td data-label="Emisión / Vencimiento">
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-color)' }}>
                         {fechaEmision}
                       </div>
@@ -227,7 +227,7 @@ export default function InvoicesTableClient({
                   )}
 
                   {isColVisible('items') && (
-                    <td style={{ maxWidth: '200px' }}>
+                    <td data-label="Conceptos" style={{ maxWidth: '200px' }}>
                       <span
                         style={{ fontSize: '0.8rem', color: 'var(--text-color)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                         title={f.lines?.map((l: any) => l.description).join(', ')}
@@ -243,7 +243,7 @@ export default function InvoicesTableClient({
                   )}
 
                   {isColVisible('breakdown') && (
-                    <td>
+                    <td data-label="Base & IVA">
                       <div style={{ fontSize: '0.8rem', color: 'var(--text-color)' }}>
                         Base: {base} €
                       </div>
@@ -253,17 +253,17 @@ export default function InvoicesTableClient({
                     </td>
                   )}
 
-                  <td style={{ textAlign: 'right' }}>
+                  <td data-label="Total" style={{ textAlign: 'right' }}>
                     <strong style={{ fontSize: '1rem', color: 'var(--text-color)' }}>
                       {total} €
                     </strong>
                   </td>
 
-                  <td style={{ textAlign: 'center' }}>
+                  <td data-label="Estado" style={{ textAlign: 'center' }}>
                     <InvoiceStatusButton invoiceId={f.id} initialStatus={estado} />
                   </td>
 
-                  <td style={{ textAlign: 'center' }}>
+                  <td data-label="Acciones" style={{ textAlign: 'center' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                       {isPendiente && (
                         <button

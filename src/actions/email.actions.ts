@@ -2,6 +2,7 @@
 
 import { sendInvoiceEmail } from '@/lib/email/email';
 import { createClient } from '@/lib/supabase/server';
+import { logAuditEvent } from '@/lib/audit';
 
 interface SendInvoiceActionPayload {
   to: string;
@@ -34,6 +35,13 @@ export async function sendInvoiceByEmailAction(payload: SendInvoiceActionPayload
       companyName: payload.companyName,
       issuerUserEmail: payload.companyEmail || user.email,
       pdfBase64: payload.pdfBase64,
+    });
+
+    await logAuditEvent({
+      eventCode: 'INVOICE_EMAIL_SENT',
+      description: `Factura ${payload.invoiceNumber} enviada por correo al cliente`,
+      userId: user.id,
+      metadata: { to: payload.to.trim(), invoiceNumber: payload.invoiceNumber },
     });
 
     return { success: true };

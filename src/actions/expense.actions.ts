@@ -5,6 +5,7 @@ import { expenses } from '@/db/schema';
 import { eq, and, desc, gte, lte, ilike, or } from 'drizzle-orm';
 import { createClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { logAuditEvent } from '@/lib/audit';
 import { getActiveCompanyId } from '@/actions/company.actions';
 
 export async function createExpenseAction(formData: FormData) {
@@ -76,6 +77,14 @@ export async function createExpenseAction(formData: FormData) {
       receipt_url,
     });
 
+    await logAuditEvent({
+      eventCode: 'EXPENSE_CREATED',
+      description: `Gasto registrado de ${supplier_name}`,
+      companyId,
+      userId: user.id,
+      metadata: { supplier_name, category, total_cents },
+    });
+
     revalidatePath('/gastos');
     revalidatePath('/dashboard');
 
@@ -92,6 +101,13 @@ export async function deleteExpenseAction(id: string) {
     if (!user) throw new Error('No autorizado');
 
     await db.delete(expenses).where(eq(expenses.id, id));
+
+    await logAuditEvent({
+      eventCode: 'EXPENSE_DELETED',
+      description: 'Gasto eliminado',
+      userId: user.id,
+      metadata: { expenseId: id },
+    });
 
     revalidatePath('/gastos');
     revalidatePath('/dashboard');

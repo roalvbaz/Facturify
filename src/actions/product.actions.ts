@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { products } from "@/db/schema";
 import { eq, and, ilike, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { logAuditEvent } from "@/lib/audit";
 import { getActiveCompanyId } from "@/actions/company.actions";
 
 export async function getCompanyProductsAction(q?: string) {
@@ -52,6 +53,13 @@ export async function createProductAction(formData: FormData) {
       default_vat: defaultVat,
     });
 
+    await logAuditEvent({
+      eventCode: 'PRODUCT_CREATED',
+      description: `Alta del producto/servicio ${name}`,
+      companyId,
+      metadata: { name, price_cents: priceCents },
+    });
+
     revalidatePath("/productos");
     return { success: true };
   } catch (err: any) {
@@ -66,6 +74,13 @@ export async function deleteProductAction(id: string) {
     await db
       .delete(products)
       .where(and(eq(products.id, id), eq(products.company_id, companyId)));
+
+    await logAuditEvent({
+      eventCode: 'PRODUCT_DELETED',
+      description: 'Producto/servicio eliminado',
+      companyId,
+      metadata: { productId: id },
+    });
 
     revalidatePath("/productos");
     return { success: true };

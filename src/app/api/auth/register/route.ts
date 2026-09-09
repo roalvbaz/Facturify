@@ -6,7 +6,8 @@ import { verifyRecaptcha } from '@/lib/recaptcha';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getInvitationByToken } from '@/lib/invitations';
 import { db } from '@/db';
-import { invitations, audit_logs } from '@/db/schema';
+import { invitations } from '@/db/schema';
+import { logAuditEvent } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -129,16 +130,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Registrar en auditoría (no crítico: si la tabla no existe o falla, no rompemos el registro)
-    try {
-      await db.insert(audit_logs).values({
-        user_id: signInData.user.id,
-        event_code: 'USER_REGISTERED',
-        description: `El usuario ${invitation.email} completó su registro a través de la invitación`,
-      });
-    } catch (auditErr) {
-      console.warn('⚠️ No se pudo registrar auditoría ( tabla audit_logs puede no existir):', auditErr);
-    }
+    // Registrar en auditoría (no crítico: si falla, no rompemos el registro)
+    await logAuditEvent({
+      eventCode: 'USER_REGISTERED',
+      description: `El usuario ${invitation.email} completó su registro a través de la invitación`,
+      userId: signInData.user.id,
+    });
 
     const finalResponse = NextResponse.json({ success: true });
 

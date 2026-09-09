@@ -1,14 +1,43 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { invoices, customers, companies, company_members } from '@/db/schema';
 import { eq, and, gte, lte } from 'drizzle-orm';
 import { sendPaymentReminderEmail } from '@/lib/email/email';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { logAuditEvent } from '@/lib/audit';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+// El cron lo dispara un planificador externo (p.ej. cron-job.org). Se
+// protege con un secreto compartido en el header `x-cron-secret` (o
+// `Authorization: Bearer <secreto>`), igual que /api/admin/invite.
+function checkCronSecret(request: NextRequest): NextResponse | null {
+  const configuredSecret = process.env.CRON_SECRET;
+  if (!configuredSecret) {
+    return NextResponse.json(
+      { error: 'CRON_SECRET no está configurado en el servidor.' },
+      { status: 500 }
+    );
+  }
+
+  const suppliedSecret =
+    request.headers.get('x-cron-secret') ||
+    (request.headers.get('authorization')?.startsWith('Bearer ')
+      ? request.headers.get('authorization')!.slice(7)
+      : null);
+
+  if (!suppliedSecret || suppliedSecret !== configuredSecret) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  }
+
+  return null;
+}
+
+export async function GET(request: NextRequest) {
   try {
+    // 0. Guard de autenticación del cron
+    const denied = checkCronSecret(request);
+    if (denied) return denied;
     // Calculamos el rango de vencimiento: dentro de 7 días
     const targetDate = new Date();
     targetDate.setDate(targetDate.getDate() + 7);
@@ -81,6 +110,13 @@ export async function GET() {
 
       sentCount++;
     }
+
+    // Auditoría: ejecución del cron (sin usuario ni empresa asociados).
+    await logAuditEvent({
+      eventCode: 'CRON_PAYMENT_REMINDERS_RUN',
+      description: `Ejecución del cron de recordatorios de pago`,
+      metadata: { processed: pendingInvoices.length, sent: sentCount },
+    });
 
     return NextResponse.json({
       success: true,

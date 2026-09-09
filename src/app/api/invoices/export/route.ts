@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { invoices, customers } from "@/db/schema";
 import { eq, and, ilike, gte, lte, desc, or } from "drizzle-orm";
 import { getActiveCompanyId } from "@/actions/company.actions";
+import { logAuditEvent } from "@/lib/audit";
 
 export async function GET(request: NextRequest) {
   try {
@@ -71,6 +72,15 @@ export async function GET(request: NextRequest) {
       .leftJoin(customers, eq(invoices.customer_id, customers.id))
       .where(and(...conditions))
       .orderBy(desc(invoices.issued_at));
+
+    // Auditoría: exportación del Libro Registro (no bloquea la exportación).
+    await logAuditEvent({
+      eventCode: "INVOICE_EXPORTED",
+      description: `Exportación del Libro de Facturas en CSV (${facturas.length} registros)`,
+      companyId,
+      userId: user.id,
+      metadata: { rows: facturas.length },
+    });
 
     // Cabecera CSV en formato Libro Registro Oficial de Facturas Expedidas
     const headers = [

@@ -42,7 +42,7 @@ export default function CompanySelector({
         >
           {companies.map((comp) => (
             <option key={comp.id} value={comp.id} className="bg-white dark:bg-slate-900">
-              {comp.name} ({comp.tax_id})
+              {comp.name}
             </option>
           ))}
         </select>

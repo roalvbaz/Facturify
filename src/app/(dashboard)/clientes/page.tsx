@@ -207,7 +207,7 @@ export default async function ClientesPage({
             <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem' }}>Prueba a cambiar el término de búsqueda o añade un nuevo cliente.</p>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+          <table className="mobile-card-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-color)' }}>
                 <th style={{ padding: '0.8rem 1.25rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.7rem' }}>Nombre / Razón Social</th>
@@ -220,19 +220,19 @@ export default async function ClientesPage({
             <tbody>
               {listaClientes.map((c) => (
                 <tr key={c.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background 0.2s' }}>
-                  <td style={{ padding: '0.8rem 1.25rem', fontWeight: 600, color: 'var(--text-color)' }}>
+                  <td data-label="Nombre / Razón Social" style={{ padding: '0.8rem 1.25rem', fontWeight: 600, color: 'var(--text-color)' }}>
                     {c.name || 'Cliente sin nombre'}
                   </td>
-                  <td style={{ padding: '0.8rem 1.25rem', fontWeight: 600, color: 'var(--primary)' }}>
+                  <td data-label="NIF / CIF" style={{ padding: '0.8rem 1.25rem', fontWeight: 600, color: 'var(--primary)' }}>
                     {c.tax_id || '-'}
                   </td>
-                  <td style={{ padding: '0.8rem 1.25rem', color: 'var(--text-muted)' }}>
+                  <td data-label="Correo Electrónico" style={{ padding: '0.8rem 1.25rem', color: 'var(--text-muted)', wordBreak: 'break-word' }}>
                     {c.email || '-'}
                   </td>
-                  <td style={{ padding: '0.8rem 1.25rem', maxWidth: '250px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <td data-label="Dirección Fiscal" style={{ padding: '0.8rem 1.25rem', maxWidth: '250px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                     {c.address || '-'}
                   </td>
-                  <td style={{ padding: '0.8rem 1.25rem', textAlign: 'center' }}>
+                  <td data-label="Acciones" style={{ padding: '0.8rem 1.25rem', textAlign: 'center' }}>
                     <DeleteCustomerButton customerId={c.id} customerName={c.name || 'este cliente'} />
                   </td>
                 </tr>

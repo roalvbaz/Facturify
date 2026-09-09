@@ -5,6 +5,7 @@ import { customers } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { logAuditEvent } from '@/lib/audit';
 import { getActiveCompanyId } from '@/actions/company.actions';
 export async function deleteCustomerAction(customerId: string) {
   try {
@@ -26,6 +27,14 @@ export async function deleteCustomerAction(customerId: string) {
           eq(customers.company_id, companyId)
         )
       );
+
+    await logAuditEvent({
+      eventCode: 'CUSTOMER_DEACTIVATED',
+      description: `Cliente dado de baja`,
+      companyId,
+      userId: user.id,
+      metadata: { customerId },
+    });
 
     revalidatePath('/clientes');
     revalidatePath('/nueva-factura');
@@ -60,6 +69,14 @@ export async function createCustomerAction(formData: FormData) {
       email,
       address,
       is_active: true,
+    });
+
+    await logAuditEvent({
+      eventCode: 'CUSTOMER_CREATED',
+      description: `Alta del cliente ${name}`,
+      companyId,
+      userId: user.id,
+      metadata: { name, tax_id },
     });
 
     revalidatePath("/clientes");

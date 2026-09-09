@@ -129,7 +129,7 @@ export default function ExpensesClientView({
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table className="data-table">
+            <table className="data-table mobile-card-table">
               <thead>
                 <tr>
                   <th>Fecha</th>
@@ -145,23 +145,23 @@ export default function ExpensesClientView({
               <tbody>
                 {gastos.map((g) => (
                   <tr key={g.id}>
-                    <td>{new Date(g.expense_date).toLocaleDateString('es-ES')}</td>
-                    <td>
+                    <td data-label="Fecha">{new Date(g.expense_date).toLocaleDateString('es-ES')}</td>
+                    <td data-label="Proveedor / NIF">
                       <div style={{ fontWeight: 600, color: 'var(--text-color)' }}>{g.supplier_name}</div>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{g.supplier_tax_id || g.invoice_reference || 'Sin NIF'}</span>
                     </td>
-                    <td>
+                    <td data-label="Categoría / Concepto">
                       <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: '4px', backgroundColor: 'var(--bg-color)', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-color)', marginBottom: '2px' }}>
                         {g.category}
                       </span>
                       {g.description && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{g.description}</div>}
                     </td>
-                    <td>{(g.subtotal_cents / 100).toFixed(2)} €</td>
-                    <td style={{ color: '#059669', fontWeight: 600 }}>+{(g.vat_amount_cents / 100).toFixed(2)} € ({g.vat_percent}%)</td>
-                    <td style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>
+                    <td data-label="Base">{(g.subtotal_cents / 100).toFixed(2)} €</td>
+                    <td data-label="IVA Soportado" style={{ color: '#059669', fontWeight: 600 }}>+{(g.vat_amount_cents / 100).toFixed(2)} € ({g.vat_percent}%)</td>
+                    <td data-label="Total" style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>
                       {(g.total_cents / 100).toFixed(2)} €
                     </td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td data-label="Ticket" style={{ textAlign: 'center' }}>
                       {g.receipt_url ? (
                         <a href={g.receipt_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary)', fontSize: '1.1rem' }} title="Ver archivo">
                           <i className="fas fa-file-alt"></i>
@@ -170,7 +170,7 @@ export default function ExpensesClientView({
                         <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>-</span>
                       )}
                     </td>
-                    <td style={{ textAlign: 'center' }}>
+                    <td data-label="Acciones" style={{ textAlign: 'center' }}>
                       <button
                         type="button"
                         onClick={() => handleDelete(g.id, g.supplier_name)}

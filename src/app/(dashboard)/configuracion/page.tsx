@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { getUserCompanies, getActiveCompanyId } from "@/actions/company.actions";
 import ConfigForm from "./configForm";
+import ChangePasswordForm from "./changePasswordForm";
 
 export default async function ConfiguracionPage() {
   const supabase = await createClient();
@@ -33,6 +34,13 @@ export default async function ConfiguracionPage() {
           <i className="fas fa-building" style={{ color: "var(--text-muted)" }}></i> Panel de Control Fiscal y Estético
         </h3>
         <ConfigForm company={mergedData} />
+      </div>
+
+      <div className="card" style={{ padding: "1.5rem", marginBottom: "1.5rem" }}>
+        <h3 style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text-color)", margin: "0 0 1.25rem 0", display: "flex", alignItems: "center", gap: "8px" }}>
+          <i className="fas fa-key" style={{ color: "var(--text-muted)" }}></i> Seguridad y Contraseña
+        </h3>
+        <ChangePasswordForm />
       </div>
 
       <div className="card" style={{ padding: "1.5rem", border: "1px solid #10b981", backgroundColor: "rgba(16, 185, 129, 0.05)" }}>

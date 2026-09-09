@@ -14,11 +14,22 @@ export default function LoginPage() {
   const recaptchaRef = useRef<ReCAPTCHA>(null);
   const router = useRouter();
 
-  // Capturar errores que vengan por la URL (ej: enlace de correo caducado)
+  // Capturar errores que vengan por la URL (ej: enlace de correo caducado).
+  // Supabase a veces devuelve el error en el fragmento (#error=...) y otras
+  // en la query string (?error=...), así que leemos ambos.
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const urlError = params.get('error');
-    if (urlError) setError(urlError);
+    const search = new URLSearchParams(window.location.search).get('error');
+    const hash = new URLSearchParams(window.location.hash.slice(1)).get('error');
+    const urlError = search || hash;
+    if (urlError) {
+      if (urlError === 'access_denied' || urlError.includes('expired')) {
+        setError('El enlace ha caducado o ya no es válido. Solicita uno nuevo.');
+      } else {
+        setError(decodeURIComponent(urlError));
+      }
+      // Limpiamos el fragmento para que no quede el error si se recarga
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -58,8 +69,8 @@ export default function LoginPage() {
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f1f5f9', padding: '2rem' }}>
-      <div className="card" style={{ maxWidth: '400px', width: '100%', padding: '2.5rem' }}>
+    <div className="login-page" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f1f5f9', padding: '2rem' }}>
+      <div className="card login-card" style={{ maxWidth: '400px', width: '100%', padding: '2.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
           <Image
             src="/img/banner.png"
@@ -67,7 +78,7 @@ export default function LoginPage() {
             width={280}
             height={65}
             priority
-            style={{ objectFit: 'contain' }}
+            style={{ objectFit: 'contain', maxWidth: '100%', height: 'auto' }}
           />
         </div>
 
