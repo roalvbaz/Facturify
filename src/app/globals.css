@@ -566,3 +566,265 @@ body {
   filter: brightness(0.9) !important;
   transform: scale(1.1) !important;
 }
+
+/* ==========================================================================
+   RESPONSIVE / MÓVIL
+   Punto de corte: pantallas <= 768px (móvil/tablet). El resto queda igual.
+   ========================================================================== */
+
+/* --- Botón hamburguesa + barra superior (solo visible en móvil) --- */
+.mobile-topbar,
+.mobile-menu-btn {
+  display: none;
+}
+
+.mobile-menu-btn {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 10px;
+  background-color: transparent;
+  color: #ffffff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background-color 0.2s ease;
+}
+.mobile-menu-btn:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+.mobile-menu-btn:active {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+/* Botón cerrar menú (oculto en escritorio) */
+.sidebar-close {
+  display: none;
+}
+
+/* Grids de dashboard (gráfico + pendientes) */
+.dashboard-chart-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1.5rem;
+}
+
+/* Los hijos de los grids no deben forzar desbordes horizontales
+   (p. ej. el canvas de Chart.js que mide un ancho grande al montar). */
+.dashboard-chart-grid > *,
+.responsive-grid > * {
+  min-width: 0;
+}
+
+/* Grids de formularios: apilan en móvil */
+.responsive-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+}
+
+/* Líneas de factura (editor) */
+.invoice-line-grid {
+  display: grid;
+  grid-template-columns: 4fr 1fr 1.2fr 1.5fr 1fr 60px;
+  gap: 8px;
+  align-items: center;
+  background: var(--bg-color);
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--border-color);
+}
+
+@media (max-width: 768px) {
+  .mobile-menu-btn { display: flex; }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(15, 23, 42, 0.5);
+    z-index: 9999;
+  }
+
+  /* Sidebar → drawer deslizante desde la izquierda */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 10000;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    box-shadow: none;
+    max-width: 85vw;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 30px rgba(0, 0, 0, 0.3);
+  }
+
+  .sidebar-close {
+    display: flex !important;
+  }
+
+  /* Contenido principal: menos padding en móvil */
+  .main-content {
+    padding: 1rem !important;
+  }
+
+  /* Objetivos táctiles cómodos */
+  .btn {
+    min-height: 44px;
+  }
+  .form-control {
+    min-height: 44px;
+  }
+
+  /* Dashboard: el gráfico y la lista apilan en una columna */
+  .dashboard-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Formularios: una sola columna */
+  .responsive-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* --- Tablas → tarjetas apiladas --- */
+  .mobile-card-table,
+  .mobile-card-table tbody,
+  .mobile-card-table tr,
+  .mobile-card-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .mobile-card-table thead {
+    display: none;
+  }
+
+  .mobile-card-table tr {
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    margin-bottom: 0.75rem;
+    padding: 0.25rem 0;
+    background-color: #ffffff;
+  }
+
+  .mobile-card-table td {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    border: none;
+    border-bottom: 1px solid #f1f5f9;
+    padding: 0.6rem 1rem;
+    text-align: right;
+    flex-wrap: wrap;
+  }
+
+  .mobile-card-table td:last-child {
+    border-bottom: none;
+  }
+
+  .mobile-card-table td::before {
+    content: attr(data-label);
+    font-weight: 700;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+
+  /* --- Editor de líneas de factura: apilado en tarjeta --- */
+  .invoice-line-grid {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+    padding: 0.75rem;
+  }
+  .invoice-line-grid > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+  .invoice-line-grid > div::before {
+    content: attr(data-label);
+    font-weight: 700;
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    flex-shrink: 0;
+  }
+  .invoice-line-grid input,
+  .invoice-line-grid select {
+    flex: 1;
+    min-width: 90px;
+  }
+
+  /* --- Modal de factura: cabecera y botones apilables --- */
+  .invoice-modal-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 0.75rem;
+    padding: 1rem !important;
+  }
+  .invoice-modal-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+  .invoice-modal-body {
+    padding: 1rem !important;
+  }
+
+  /* --- Stat cards: reducir fuente del valor --- */
+  .dashboard-stat {
+    font-size: 1.35rem !important;
+  }
+
+  /* --- Página de login: menos padding --- */
+  .login-page {
+    padding: 1rem !important;
+  }
+  .login-card {
+    padding: 1.5rem !important;
+  }
+}
+
+/* --- Cabecera del modal de factura (clases) --- */
+.invoice-modal-header {
+  background-color: white;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid #cbd5e1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
+}
+.invoice-modal-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.invoice-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}

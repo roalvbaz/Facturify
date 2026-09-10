@@ -4,6 +4,7 @@ import { db } from '@/db';
 import { invitations } from '@/db/schema';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendRegistrationInvitationEmail } from '@/lib/email/email';
+import { logAuditEvent } from '@/lib/audit';
 
 /** El enlace de registro caduca a los 7 días */
 export const INVITE_LIFETIME_DAYS = 7;
@@ -144,6 +145,16 @@ export async function createInvitation(opts: {
       invitationId = row.id;
       created = true;
     }
+
+    // Auditoría: nueva invitación o renovación de enlace (emisor = createdBy).
+    await logAuditEvent({
+      eventCode: created ? 'INVITATION_CREATED' : 'INVITATION_RENEWED',
+      description: created
+        ? `Invitación de registro creada para ${email}`
+        : `Enlace de invitación renovado para ${email}`,
+      userId: opts.createdBy ?? null,
+      metadata: { email, invitationId },
+    });
 
     // Envío opcional del correo con el enlace de registro
     if (opts.sendEmail) {

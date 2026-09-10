@@ -344,3 +344,80 @@ export async function sendPaymentReminderEmail({
     return { success: false, error: error.message || 'Error al enviar el recordatorio' };
   }
 }
+
+interface SendResetPasswordEmailParams {
+  to: string;
+  code: string; // Código OTP de 6 dígitos
+}
+
+export async function sendResetPasswordEmail({
+  to,
+  code,
+}: SendResetPasswordEmailParams) {
+  try {
+    const subject = 'Código de verificación — FacturON';
+
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #f8fafc; margin: 0; padding: 20px; color: #1e293b; }
+            .container { max-width: 580px; margin: 0 auto; background: #ffffff; border-radius: 10px; padding: 30px; border: 1px solid #e2e8f0; }
+            .header { text-align: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 20px; }
+            .title { font-size: 22px; font-weight: 800; color: #0f172a; margin: 0; }
+            .subtitle { font-size: 13px; color: #64748b; margin-top: 4px; }
+            .content { font-size: 14px; line-height: 1.6; color: #334155; }
+            .code-box { background-color: #f1f5f9; border: 2px dashed #cbd5e1; border-radius: 10px; padding: 20px; margin: 24px 0; text-align: center; }
+            .code { font-size: 36px; font-weight: 900; letter-spacing: 8px; color: #0f172a; font-family: 'Courier New', monospace; }
+            .note { font-size: 12px; color: #94a3b8; background-color: #f8fafc; border-left: 3px solid #e2e8f0; padding: 10px 14px; border-radius: 6px; margin-top: 18px; }
+            .footer { text-align: center; font-size: 11px; color: #94a3b8; margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 15px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1 class="title">Código de Verificación</h1>
+              <p class="subtitle">Facturación electrónica conforme al Reglamento Veri*factu</p>
+            </div>
+            <div class="content">
+              <p>Hola,</p>
+              <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta de <strong>FacturON</strong>.</p>
+              <p>Utiliza el siguiente código de verificación:</p>
+
+              <div class="code-box">
+                <div class="code">${code}</div>
+              </div>
+
+              <p style="font-size: 13px; color: #64748b;">
+                Introduce este código en la página de recuperación de contraseña junto con tu nueva contraseña.
+              </p>
+
+              <div class="note">
+                🔒 El código caduca en <strong>5 minutos</strong>. Si no has solicitado este cambio, ignora este correo; tu contraseña no cambiará.
+              </div>
+            </div>
+            <div class="footer">
+              Enviado automáticamente por FacturON. Si no has solicitado restablecer tu contraseña, ignora este mensaje.
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const mailOptions: SendMailOptions = {
+      from: `"FacturON" <${process.env.EMAIL_USER}>`,
+      to: to.trim(),
+      subject,
+      html: htmlContent,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    return { success: true, data: info };
+
+  } catch (error: any) {
+    console.error('❌ Error enviando email de recuperación de contraseña:', error);
+    return { success: false, error: error.message || 'Error al enviar el correo de recuperación' };
+  }
+}

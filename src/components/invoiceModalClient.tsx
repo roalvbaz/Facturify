@@ -147,10 +147,14 @@ export default function InvoiceModalClient({
       zIndex: 2147483647, backgroundColor: 'var(--bg-color)', display: 'flex', flexDirection: 'column'
     }}>
       {/* Cabecera del visor */}
+<<<<<<< HEAD
       <div style={{ 
         backgroundColor: 'var(--card-bg)', padding: '1rem 2rem', borderBottom: '1px solid var(--border-color)',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', flexShrink: 0
       }}>
+=======
+      <div className="invoice-modal-header">
+>>>>>>> 1db09d07de85b7fa918f95f8f6ec25e7ff18974d
         <div>
           <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-main)', fontWeight: 800 }}>
             {variant === 'confirm-emit' 
@@ -165,7 +169,7 @@ export default function InvoiceModalClient({
         </div>
         
         {/* Botoneras */}
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div className="invoice-modal-actions">
           
           {variant === 'confirm-emit' && (
             <>
@@ -326,7 +330,7 @@ export default function InvoiceModalClient({
       </div>
       
       {/* Contenedor del documento */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '2rem', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+      <div className="invoice-modal-body">
         <div style={{ width: '100%', maxWidth: '900px' }}>
           <InvoicePDFTemplate factura={factura} empresa={empresa} settings={settings} templateId={templateId} />
         </div>

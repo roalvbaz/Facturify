@@ -1,10 +1,15 @@
 'use server';
 
 import { db } from '@/db';
+<<<<<<< HEAD
 import { invoices, invoice_lines, customers, audit_logs, company_settings } from '@/db/schema';
+=======
+import { invoices, invoice_lines, customers } from '@/db/schema';
+>>>>>>> 1db09d07de85b7fa918f95f8f6ec25e7ff18974d
 import { eq, and, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { logAuditEvent } from '@/lib/audit';
 import { getUserCompanies, getActiveCompanyId } from '@/actions/company.actions';
 import crypto from 'crypto';
 import { sendInvoiceEmail } from '@/lib/email/email';
@@ -33,6 +38,12 @@ export async function toggleInvoiceStatusAction(id: string, currentStatus: strin
       .update(invoices)
       .set({ status: newStatus } as any)
       .where(eq(invoices.id, id));
+
+    await logAuditEvent({
+      eventCode: 'INVOICE_STATUS_CHANGED',
+      description: `Estado de una factura cambiado a ${newStatus}`,
+      metadata: { invoiceId: id, newStatus },
+    });
 
     revalidatePath('/historial');
     revalidatePath('/dashboard');
@@ -376,12 +387,17 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
       }
     }
 
-    // 🕵️ GUARDADO SIGILOSO DE EMISIÓN EN EL AUDIT LOG
-    await db.insert(audit_logs).values({
-      company_id: activeCompanyId,
-      user_id: user.id,
-      event_code: 'INVOICE_ISSUED',
+    // 🕵️ GUARDADO SILENCIOSO DE EMISIÓN EN EL AUDIT LOG
+    await logAuditEvent({
+      eventCode: 'INVOICE_ISSUED',
       description: `Factura ${formattedInvoiceNumber} emitida de forma inmutable (${isRectification ? 'Rectificativa' : 'Ordinaria'})`,
+      companyId: activeCompanyId,
+      userId: user.id,
+      metadata: {
+        invoiceId: nuevaFactura.id,
+        formattedNumber: formattedInvoiceNumber,
+        total_cents: totalCents,
+      },
     });
 
     revalidatePath('/historial');

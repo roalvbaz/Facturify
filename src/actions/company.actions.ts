@@ -1,8 +1,9 @@
 "use server";
 
 import { db } from "@/db";
-import { companies, company_members, company_settings, audit_logs } from "@/db/schema";
+import { companies, company_members, company_settings } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
+import { logAuditEvent } from "@/lib/audit";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
@@ -119,11 +120,11 @@ export async function createCompanyAction(formData: FormData) {
     });
 
     // Audit log de creación
-    await db.insert(audit_logs).values({
-      company_id: nuevaEmpresa.id,
-      user_id: user.id,
-      event_code: "COMPANY_CREATED",
+    await logAuditEvent({
+      eventCode: "COMPANY_CREATED",
       description: `Creación de la empresa ${name} (${tax_id})`,
+      companyId: nuevaEmpresa.id,
+      userId: user.id,
     });
 
     revalidatePath("/(dashboard)", "layout");
@@ -168,6 +169,14 @@ export async function setActiveCompanyAction(companyId: string) {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
+  });
+
+  await logAuditEvent({
+    eventCode: "COMPANY_ACTIVE_CHANGED",
+    description: `Cambio de empresa activa`,
+    companyId,
+    userId: user.id,
+    metadata: { companyId },
   });
 
   revalidatePath("/(dashboard)", "layout");
@@ -231,12 +240,12 @@ export async function updateCompanySettingsAction(formData: FormData) {
         set: { theme_color, logo_url, updated_at: new Date() },
       });
 
-    // 🕵️ AQUI ESTÁ EL GUARDADO SIGILOSO DEL AUDIT LOG 🕵️
-    await db.insert(audit_logs).values({
-      company_id: companyId,
-      user_id: user.id,
-      event_code: 'CONFIG_UPDATE',
+    // 🕵️ AUDIT LOG: modificación de configuración de la empresa
+    await logAuditEvent({
+      eventCode: 'COMPANY_SETTINGS_UPDATED',
       description: 'Modificación de configuración fiscal, NIF o logotipo de la empresa',
+      companyId,
+      userId: user.id,
     });
 
     revalidatePath("/(dashboard)", "layout");

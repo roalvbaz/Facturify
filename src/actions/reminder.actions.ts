@@ -5,6 +5,7 @@ import { invoices, customers, companies, company_members } from '@/db/schema';
 import { eq } from 'drizzle-orm';
 import { createClient } from '@/lib/supabase/server';
 import { sendPaymentReminderEmail } from '@/lib/email/email';
+import { logAuditEvent } from '@/lib/audit';
 
 export async function sendPaymentReminderAction(invoiceId: string) {
   try {
@@ -45,6 +46,14 @@ export async function sendPaymentReminderAction(invoiceId: string) {
       dueDateFormatted,
       companyName: factura.company_name,
       issuerUserEmail: user.email || '',
+    });
+
+    await logAuditEvent({
+      eventCode: 'INVOICE_REMINDER_SENT',
+      description: `Recordatorio de vencimiento enviado para la factura ${factura.formatted_number}`,
+      companyId: factura.company_id,
+      userId: user.id,
+      metadata: { invoiceId: factura.id, invoiceNumber: factura.formatted_number },
     });
 
     return { success: true };

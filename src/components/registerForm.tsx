@@ -30,8 +30,8 @@ export default function RegisterForm({
       setError('Por favor, escribe tu nombre y apellidos.');
       return;
     }
-    if (password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres.');
+    if (password.length < 8) {
+      setError('La contraseña debe tener al menos 8 caracteres.');
       return;
     }
     if (password !== confirm) {
@@ -84,16 +84,16 @@ export default function RegisterForm({
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f1f5f9', padding: '2rem' }}>
-      <div className="card" style={{ maxWidth: '400px', width: '100%', padding: '2.5rem' }}>
+    <div className="login-page" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f1f5f9', padding: '2rem' }}>
+      <div className="card login-card" style={{ maxWidth: '400px', width: '100%', padding: '2.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
           <Image
             src="/img/banner.png"
             alt="FacturON Logo"
-            width={280}
-            height={65}
+            width={432}
+            height={121}
             priority
-            style={{ objectFit: 'contain' }}
+            style={{ objectFit: 'contain', maxWidth: '100%', height: 'auto' }}
           />
         </div>
 
@@ -151,12 +151,12 @@ export default function RegisterForm({
               type="password"
               id="password"
               required
-              minLength={6}
+              minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="form-control"
               style={{ width: '100%' }}
-              placeholder="Mínimo 6 caracteres"
+              placeholder="Mínimo 8 caracteres"
             />
           </div>
 
@@ -168,7 +168,7 @@ export default function RegisterForm({
               type="password"
               id="confirm"
               required
-              minLength={6}
+              minLength={8}
               value={confirm}
               onChange={(e) => setConfirm(e.target.value)}
               className="form-control"

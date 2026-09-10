@@ -187,6 +187,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
+<<<<<<< HEAD
       {/* Tarjetas de Métricas */}
       <div className="stagger-children" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.75rem' }}>
         {metrics.map((m) => (
@@ -253,6 +254,53 @@ export default async function DashboardPage() {
               Evolución de Ingresos
             </h4>
           </div>
+=======
+      {/* Tarjetas de Resumen */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1.25rem', marginBottom: '2rem' }}>
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', margin: '0 0 0.5rem 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Total Cobrado
+          </p>
+          <h3 className="dashboard-stat" style={{ fontSize: '1.85rem', fontWeight: 800, color: '#10b981', margin: 0 }}>
+            {(totalCobradoCents / 100).toFixed(2)} €
+          </h3>
+        </div>
+        
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', margin: '0 0 0.5rem 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Pendiente Cobro
+          </p>
+          <h3 className="dashboard-stat" style={{ fontSize: '1.85rem', fontWeight: 800, color: '#f59e0b', margin: 0 }}>
+            {(totalPendienteCents / 100).toFixed(2)} €
+          </h3>
+        </div>
+        
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', margin: '0 0 0.5rem 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Facturado Mes
+          </p>
+          <h3 className="dashboard-stat" style={{ fontSize: '1.85rem', fontWeight: 800, color: '#0ea5e9', margin: 0 }}>
+            {(facturadoMesCents / 100).toFixed(2)} €
+          </h3>
+        </div>
+        
+        <div className="card" style={{ padding: '1.25rem' }}>
+          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', margin: '0 0 0.5rem 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Total Facturas
+          </p>
+          <h3 className="dashboard-stat" style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-color)', margin: 0 }}>
+            {facturas.length}
+          </h3>
+        </div>
+      </div>
+
+      {/* Gráfico y Facturas Pendientes */}
+      <div className="dashboard-chart-grid">
+        <div className="card" style={{ padding: '1.5rem' }}>
+          <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-color)', marginBottom: '1.25rem', marginTop: 0 }}>
+            Evolución de Ingresos
+          </h4>
+>>>>>>> 1db09d07de85b7fa918f95f8f6ec25e7ff18974d
           {facturas.length === 0 ? (
             <div style={{ height: '280px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-color)', borderRadius: '10px', border: '1px dashed var(--border-color)' }}>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No hay suficientes datos para generar el gráfico</p>

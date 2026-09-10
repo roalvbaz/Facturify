@@ -131,6 +131,7 @@ export default function CompanySelector({
           }}
           onClick={() => setIsOpen(false)}
         >
+<<<<<<< HEAD
           <div
             className="card"
             onClick={(e) => e.stopPropagation()}
@@ -231,5 +232,15 @@ export default function CompanySelector({
         </div>
       )}
     </>
+=======
+          {companies.map((comp) => (
+            <option key={comp.id} value={comp.id} className="bg-white dark:bg-slate-900">
+              {comp.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    </div>
+>>>>>>> 1db09d07de85b7fa918f95f8f6ec25e7ff18974d
   );
 }

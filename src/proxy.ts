@@ -49,7 +49,9 @@ export async function proxy(request: NextRequest) {
 
   // Rutas accesibles SIN sesión:
   // - /login (página de acceso)
-  // - /recuperar-password (página de recuperación)
+  // - /recuperar-password (página de recuperación: solo pide el correo)
+  // - /actualizar-password (canje del código OTP + nueva contraseña: aquí todavía
+  //   NO hay sesión, verifyOtp la crea al verificar el código)
   // - /registro (página pública de registro: solo valida las invitaciones ?invite=...)
   // - /api/auth/* (login y canje del código del correo: todavía no hay cookie)
   // - /api/cron/* (disparado por un cron externo, sin cookies de usuario)
@@ -58,6 +60,7 @@ export async function proxy(request: NextRequest) {
   const isPublicRoute =
     pathname.startsWith('/login') ||
     pathname.startsWith('/recuperar-password') ||
+    pathname.startsWith('/actualizar-password') ||
     pathname.startsWith('/registro') ||
     pathname.startsWith('/api/auth/') ||
     pathname.startsWith('/api/cron/') ||

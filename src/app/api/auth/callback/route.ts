@@ -5,8 +5,10 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get('code');
   const next = searchParams.get('next') ?? '/dashboard';
-  
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || origin;
+
+  // Redirigimos al mismo origen desde el que se llamó al callback: así funciona
+  // igual en localhost (dev) y en Render (producción). Nunca mezclamos entornos.
+  const siteUrl = origin || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
 
   if (code) {
     const supabase = await createClient();

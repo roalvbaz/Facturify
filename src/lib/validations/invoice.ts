@@ -50,7 +50,7 @@ export const RegisterRequestSchema = z.object({
     .trim()
     .min(1, 'El nombre es obligatorio')
     .max(120, 'El nombre es demasiado largo'),
-  password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
+  password: z.string().min(8, 'La contraseña debe tener al menos 8 caracteres'),
   recaptchaToken: z.string().min(1, 'Por favor, completa la verificación de reCAPTCHA'),
 });
 

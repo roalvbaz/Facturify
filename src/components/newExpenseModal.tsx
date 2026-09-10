@@ -154,7 +154,7 @@ export default function NewExpenseModal({
           }}
         >
           {/* PROVEEDOR Y NIF */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.8fr 1.2fr', gap: '1rem' }}>
+          <div className="responsive-grid">
             <div>
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                 Proveedor / Comercio *
@@ -181,7 +181,7 @@ export default function NewExpenseModal({
           </div>
 
           {/* REF, FECHA Y CATEGORÍA */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1rem' }}>
+          <div className="responsive-grid">
             <div>
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                 Nº Factura / Ref
@@ -236,15 +236,14 @@ export default function NewExpenseModal({
 
           {/* BASE, IVA, IRPF */}
           <div
+            className="responsive-grid"
             style={{
-              display: 'grid',
-              gridTemplateColumns: '2fr 1fr 1fr',
-              gap: '1rem',
               alignItems: 'center',
               backgroundColor: '#f8fafc',
               padding: '1.25rem',
               borderRadius: '10px',
               border: '1px solid #e2e8f0',
+              gap: '1rem',
             }}
           >
             <div>
@@ -315,7 +314,7 @@ export default function NewExpenseModal({
           </div>
 
           {/* MÉTODO DE PAGO Y ESTADO */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="responsive-grid">
             <div>
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                 Método de Pago
