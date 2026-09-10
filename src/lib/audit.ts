@@ -134,9 +134,12 @@ export async function logAuditEvent({
       ip_address: ip,
     });
 
+    if (process.env.NODE_ENV === 'development') {
+      console.log(`✅ Audit OK: ${eventCode}`, { company, usr, ip });
+    }
     return true;
   } catch (error) {
-    console.error(`💥 No se pudo registrar el evento de auditoría ${eventCode}:`, error);
+    console.error(`💥 Audit FAIL [${eventCode}]:`, error);
     return false;
   }
 }
