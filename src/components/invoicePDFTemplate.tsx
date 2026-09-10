@@ -1,54 +1,136 @@
-export default function InvoicePDFTemplate({ 
-  factura, 
-  empresa, 
-  settings 
-}: { 
-  factura: any; 
-  empresa: any; 
+import { InvoiceTemplateConfig, getTemplateById } from '@/lib/invoice-templates';
+import { readableTextOn, readableTextOnGradient } from '@/lib/colorUtils';
+
+export default function InvoicePDFTemplate({
+  factura,
+  empresa,
+  settings,
+  templateId,
+}: {
+  factura: any;
+  empresa: any;
   settings?: any;
+  templateId?: string;
 }) {
-  const isRectification = 
-    factura.series_code === 'R' || 
-    factura.formatted_number?.startsWith('R-') || 
+  const isRectification =
+    factura.series_code === 'R' ||
+    factura.formatted_number?.startsWith('R-') ||
     Boolean(factura.rectifies_invoice_id);
 
-  const primaryColor = isRectification 
-    ? '#dc2626' 
-    : (settings?.theme_color || empresa?.theme_color || '#4f46e5');
+  const template = templateId ? getTemplateById(templateId) : null;
+
+  const primaryColor = isRectification
+    ? '#dc2626'
+    : (template?.accentColor || settings?.theme_color || empresa?.theme_color || '#4f46e5');
+
+  const secondaryColor = template?.secondaryColor || primaryColor;
+
+  const headerBg =
+    template?.headerStyle === 'gradient'
+      ? `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`
+      : primaryColor;
+
+  const headerTextAlign =
+    template?.headerLayout === 'centered' ? 'center'
+    : template?.headerLayout === 'left' ? 'left'
+    : 'right';
+
+  // Contraste garantizado: el texto de la cabecera se elige automáticamente
+  // para que sea legible sobre el fondo (blanco u oscuro), da igual el color
+  // de plantilla elegido a mano. En gradientes se usa el punto medio.
+  const headerTextColor =
+    template?.headerStyle === 'gradient'
+      ? readableTextOnGradient(primaryColor, secondaryColor)
+      : readableTextOn(primaryColor);
+
+  const tableHeaderBg =
+    template?.tableHeaderStyle === 'filled' ? primaryColor
+    : template?.tableHeaderStyle === 'outlined' ? 'transparent'
+    : '#f8fafc';
+
+  const tableHeaderBorder =
+    template?.tableHeaderStyle === 'outlined' ? `1px solid ${primaryColor}`
+    : '2px solid #e2e8f0';
+
+  const tableHeaderColor =
+    template?.tableHeaderStyle === 'filled'
+      ? readableTextOn(primaryColor) // texto legible sobre el fondo lleno
+      : '#475569';
+
+  const showFooter = template ? (template.showFooter !== false) : true;
 
   const logoUrl = settings?.logo_url || empresa?.logo_url || null;
 
   return (
-    <div 
-      id={`printable-invoice-${factura.id || 'preview'}`} 
+    <div
+      id={`printable-invoice-${factura.id || 'preview'}`}
+      className="invoice-document"
       style={{
         width: '210mm',
-        height: '290mm', // Altura fija calibrada para evitar la creación de la página 2
+        height: '290mm',
         padding: '12mm 15mm',
         margin: '0 auto',
         backgroundColor: '#ffffff',
         color: '#0f172a',
-        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontFamily: template?.fontFamily || 'Arial, Helvetica, sans-serif',
         boxSizing: 'border-box',
         boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'space-between', // Empuja cabecera/conceptos arriba y totales/pie abajo
-        overflow: 'hidden', // Bloquea desbordamientos accidentales
+        justifyContent: 'space-between',
+        overflow: 'hidden',
       }}
     >
       {/* SECCIÓN SUPERIOR: CABECERA, CLIENTE Y LÍNEAS DE CONCEPTOS */}
       <div>
-        {/* CABECERA (DATOS EMISOR Y DOCUMENTO) */}
+        {/* CABECERA — estilo取决于 la plantilla */}
+        {template ? (
+          <div style={{
+            background: headerBg,
+            padding: '16px 20px',
+            marginBottom: '14px',
+            color: headerTextColor,
+            textAlign: headerTextAlign,
+            borderRadius: '4px',
+          }}>
+            <div style={{ display: 'flex', flexDirection: headerTextAlign === 'center' ? 'column' : 'row', justifyContent: headerTextAlign === 'center' ? 'center' : 'space-between', alignItems: headerTextAlign === 'center' ? 'center' : 'flex-start', gap: '12px' }}>
+              <div style={{ textAlign: headerTextAlign }}>
+                {logoUrl && (
+                  <img
+                    src={logoUrl}
+                    alt="Logo"
+                    style={{ maxHeight: '40px', maxWidth: '160px', objectFit: 'contain', marginBottom: '6px', display: 'block', marginLeft: headerTextAlign === 'center' ? 'auto' : undefined, marginRight: headerTextAlign === 'center' ? 'auto' : undefined }}
+                  />
+                )}
+                <div style={{ fontSize: '17px', fontWeight: 'bold', marginBottom: '2px' }}>
+                  {empresa?.name || empresa?.nombre || 'FacturON'}
+                </div>
+                <div style={{ fontSize: '11px', opacity: 0.85 }}>
+                  NIF: {empresa?.tax_id || empresa?.nif || '-'} — {empresa?.address || empresa?.direccion || ''}
+                </div>
+              </div>
+              <div style={{ textAlign: headerTextAlign === 'right' ? 'right' : headerTextAlign === 'center' ? 'center' : 'left' }}>
+                <div style={{ fontSize: isRectification ? '16px' : '22px', fontWeight: 'bold', marginBottom: '6px' }}>
+                  {isRectification ? 'FACTURA RECTIFICATIVA' : 'FACTURA'}
+                </div>
+                <div style={{ fontSize: '11px', opacity: 0.9 }}>
+                  <div>Nº: <strong>{factura.formatted_number}</strong></div>
+                  <div>Fecha: {factura.issued_at ? new Date(factura.issued_at).toLocaleDateString('es-ES') : '-'}</div>
+                  {factura.due_date && <div>Vence: {new Date(factura.due_date).toLocaleDateString('es-ES')}</div>}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
         <table style={{ width: '100%', borderCollapse: 'collapse', borderBottom: `3px solid ${primaryColor}`, marginBottom: '14px', paddingBottom: '8px' }}>
           <tbody>
             <tr>
               <td style={{ width: '55%', verticalAlign: 'top', paddingBottom: '8px' }}>
                 {logoUrl && (
-                  <img 
-                    src={logoUrl} 
-                    alt="Logo" 
-                    style={{ maxHeight: '40px', maxWidth: '160px', objectFit: 'contain', marginBottom: '6px', display: 'block' }} 
+                  <img
+                    src={logoUrl}
+                    alt="Logo"
+                    style={{ maxHeight: '40px', maxWidth: '160px', objectFit: 'contain', marginBottom: '6px', display: 'block' }}
                   />
                 )}
                 <div style={{ fontSize: '17px', fontWeight: 'bold', color: '#0f172a', marginBottom: '2px' }}>
@@ -91,6 +173,7 @@ export default function InvoicePDFTemplate({
             </tr>
           </tbody>
         </table>
+        )}
 
         {/* RECTIFICACIÓN (SI APLICA) */}
         {isRectification && (
@@ -129,11 +212,12 @@ export default function InvoicePDFTemplate({
         {/* TABLA DE CONCEPTOS */}
         <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: '14px' }}>
           <thead>
-            <tr style={{ borderBottom: `2px solid #e2e8f0`, backgroundColor: '#f8fafc' }}>
-              <th style={{ padding: '7px 8px', textAlign: 'left', fontSize: '10px', fontWeight: 'bold', color: '#475569', width: '52%' }}>CONCEPTO</th>
-              <th style={{ padding: '7px 8px', textAlign: 'center', fontSize: '10px', fontWeight: 'bold', color: '#475569', width: '12%' }}>CANT.</th>
-              <th style={{ padding: '7px 8px', textAlign: 'right', fontSize: '10px', fontWeight: 'bold', color: '#475569', width: '18%' }}>PRECIO UD.</th>
-              <th style={{ padding: '7px 8px', textAlign: 'right', fontSize: '10px', fontWeight: 'bold', color: '#475569', width: '18%' }}>TOTAL</th>
+            <tr style={{ borderBottom: tableHeaderBorder, backgroundColor: tableHeaderBg }}>
+              <th style={{ padding: '7px 8px', textAlign: 'left', fontSize: '10px', fontWeight: 'bold', color: tableHeaderColor, width: '44%' }}>CONCEPTO</th>
+              <th style={{ padding: '7px 8px', textAlign: 'center', fontSize: '10px', fontWeight: 'bold', color: tableHeaderColor, width: '10%' }}>CANT.</th>
+              <th style={{ padding: '7px 8px', textAlign: 'right', fontSize: '10px', fontWeight: 'bold', color: tableHeaderColor, width: '16%' }}>PRECIO UD.</th>
+              <th style={{ padding: '7px 8px', textAlign: 'center', fontSize: '10px', fontWeight: 'bold', color: tableHeaderColor, width: '10%' }}>I.V.A.</th>
+              <th style={{ padding: '7px 8px', textAlign: 'right', fontSize: '10px', fontWeight: 'bold', color: tableHeaderColor, width: '20%' }}>TOTAL</th>
             </tr>
           </thead>
           <tbody>
@@ -147,6 +231,11 @@ export default function InvoicePDFTemplate({
                   <td style={{ padding: '8px 8px', textAlign: 'right', fontSize: '11px', color: '#475569' }}>
                     {((l.unit_price_cents || 0) / 100).toFixed(2)} €
                   </td>
+                  <td style={{ padding: '8px 8px', textAlign: 'center', fontSize: '11px', color: '#475569' }}>
+                    {l.vat_percent !== undefined && l.vat_percent !== null && Number(l.vat_percent) > 0
+                      ? `${Number(l.vat_percent)}%`
+                      : '—'}
+                  </td>
                   <td style={{ padding: '8px 8px', textAlign: 'right', fontSize: '11px', fontWeight: 'bold', color: '#0f172a' }}>
                     {((l.total_amount_cents || 0) / 100).toFixed(2)} €
                   </td>
@@ -154,7 +243,7 @@ export default function InvoicePDFTemplate({
               ))
             ) : (
               <tr>
-                <td colSpan={4} style={{ textAlign: 'center', padding: '1rem', color: '#94a3b8', fontSize: '11px' }}>
+                <td colSpan={5} style={{ textAlign: 'center', padding: '1rem', color: '#94a3b8', fontSize: '11px' }}>
                   Sin conceptos registrados
                 </td>
               </tr>
@@ -206,7 +295,8 @@ export default function InvoicePDFTemplate({
           </tbody>
         </table>
 
-        {/* PIE DE PÁGINA VERI*FACTU */}
+        {/* PIE DE PÁGINA VERI*FACTU + QR — SIEMPRE visibles (obligatorio).
+             showFooter solo controla la línea de marca decorativa. */}
         <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
           <tbody>
             <tr>
@@ -217,9 +307,11 @@ export default function InvoicePDFTemplate({
                 <div style={{ fontSize: '9px', color: '#64748b', lineHeight: '1.2', marginBottom: '2px' }}>
                   Emitido al amparo del Reglamento que regula los requisitos de los sistemas informáticos de facturación (Real Decreto 1007/2023).
                 </div>
-                <div style={{ fontSize: '9px', color: primaryColor, fontWeight: 'bold' }}>
-                  Generado de forma segura con FacturON
-                </div>
+                {showFooter && (
+                  <div style={{ fontSize: '9px', color: primaryColor, fontWeight: 'bold' }}>
+                    Generado de forma segura con FacturON
+                  </div>
+                )}
               </td>
               <td style={{ verticalAlign: 'middle', width: '20%', textAlign: 'right', paddingTop: '6px' }}>
                 {factura.qr_code_url ? (

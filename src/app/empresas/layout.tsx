@@ -4,12 +4,11 @@ import { getUserCompanies, getActiveCompanyId } from '@/actions/company.actions'
 import { isAdminUser } from '@/lib/invitations';
 import { redirect } from 'next/navigation';
 
-export default async function DashboardLayout({
+export default async function EmpresasLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // 1. Buscamos el usuario UNA SOLA VEZ para todo el panel
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -17,15 +16,25 @@ export default async function DashboardLayout({
     redirect('/login');
   }
 
-  // 2. Empresas del usuario (para el selector) y empresa activa
   const companies = await getUserCompanies();
 
-  // Si el usuario aún no tiene ninguna empresa, le llevamos al onboarding
+  // Si no tiene empresas, mostramos la página sin sidebar (onboarding puro)
   if (companies.length === 0) {
-    redirect('/empresas');
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg-color)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {children}
+      </div>
+    );
   }
 
-  const activeCompanyId = await getActiveCompanyId();
+  // Si tiene empresas, mostramos con sidebar
+  let activeCompanyId: string | null = null;
+  try {
+    activeCompanyId = await getActiveCompanyId();
+  } catch {
+    activeCompanyId = companies[0]?.id || null;
+  }
+
   const activeCompany = companies.find((c) => c.id === activeCompanyId);
   const nombreEmpresa = activeCompany?.name || 'Empresa no asignada';
 
@@ -33,7 +42,7 @@ export default async function DashboardLayout({
     <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: 'var(--bg-color)', transition: 'background-color 0.2s ease' }}>
       <Sidebar
         companies={companies}
-        activeCompanyId={activeCompanyId}
+        activeCompanyId={activeCompanyId || ''}
         nombreEmpresa={nombreEmpresa}
         emailUsuario={user.email || 'Usuario'}
         isAdmin={isAdminUser(user.email)}

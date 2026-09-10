@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { emitInvoiceAction, getActiveCompanyAction, getCompanyCustomersAction } from '@/actions/invoice.actions';
+import { getActiveCompanySettings } from '@/actions/company.actions';
 import { createProductAction } from '@/actions/product.actions';
 import { showToast } from '@/lib/utils/toast';
 import { generarFacturaBase64PDF } from '@/lib/pdf/pdf';
@@ -23,6 +24,8 @@ export default function NuevaFacturaPage() {
   const [empresa, setEmpresa] = useState<{ id?: string; name: string; nif: string; address: string }>({
     name: 'Cargando empresa...', nif: '', address: '',
   });
+
+  const [templateId, setTemplateId] = useState<string>('clasico-tradicional');
 
   const [customerList, setCustomerList] = useState<Array<any>>([]);
 
@@ -54,9 +57,10 @@ export default function NuevaFacturaPage() {
   useEffect(() => {
     async function loadData() {
       try {
-        const [compRes, custRes] = await Promise.all([
+        const [compRes, custRes, settingsRes] = await Promise.all([
           getActiveCompanyAction(),
           getCompanyCustomersAction(),
+          getActiveCompanySettings(),
         ]);
 
         if (compRes?.company) {
@@ -68,6 +72,7 @@ export default function NuevaFacturaPage() {
           });
         }
         if (custRes?.customers) setCustomerList(custRes.customers);
+        if (settingsRes?.template_id) setTemplateId(settingsRes.template_id);
       } catch (err) {
         console.error('Error al cargar datos:', err);
       }
@@ -524,7 +529,7 @@ export default function NuevaFacturaPage() {
                     top: 'calc(100% + 4px)',
                     left: 0,
                     right: 0,
-                    backgroundColor: '#ffffff',
+                    backgroundColor: 'var(--card-bg)',
                     border: '1px solid var(--border-color)',
                     borderRadius: '8px',
                     boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
@@ -546,7 +551,7 @@ export default function NuevaFacturaPage() {
                         gap: '2px',
                       }}
                       onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-color)')}
-                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = '#ffffff')}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--card-bg)')}
                     >
                       <strong style={{ fontSize: '0.85rem', color: 'var(--text-color)' }}>{c.name}</strong>
                       <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{c.tax_id ? `NIF: ${c.tax_id}` : 'Sin NIF'}</span>
@@ -700,6 +705,7 @@ export default function NuevaFacturaPage() {
       <InvoiceModalClient
         factura={previewFactura}
         empresa={empresa}
+        templateId={templateId}
         variant="preview-only"
         isOpen={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
@@ -709,6 +715,7 @@ export default function NuevaFacturaPage() {
       <InvoiceModalClient
         factura={previewFactura}
         empresa={empresa}
+        templateId={templateId}
         variant="confirm-emit"
         isOpen={isConfirmReviewOpen}
         onClose={() => setIsConfirmReviewOpen(false)}

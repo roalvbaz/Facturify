@@ -1,13 +1,16 @@
 'use server';
 
 import { db } from '@/db';
-import { invoices, invoice_lines, customers, audit_logs } from '@/db/schema';
+import { invoices, invoice_lines, customers, audit_logs, company_settings } from '@/db/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { getUserCompanies, getActiveCompanyId } from '@/actions/company.actions';
 import crypto from 'crypto';
 import { sendInvoiceEmail } from '@/lib/email/email';
+import { buildAltaXML } from '@/lib/verifactu/xml/builder';
+import { addToQueue } from '@/lib/verifactu/queue/manager';
+import { CLAVE_REGIMEN } from '@/lib/verifactu/xml/types';
 
 function construirUrlQr({ emisorNif, numeroFactura, totalCentimos, fechaExpedicion }: {
   emisorNif: string;
@@ -274,6 +277,87 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
       });
     }
 
+    // ──────────────────────────────────────────────────────────────
+    // VERI*FACTU: Encolar envío a la AEAT (si la empresa tiene certificado)
+    // ──────────────────────────────────────────────────────────────
+    let verifactuQueued = false;
+    try {
+      const [settings] = await db
+        .select()
+        .from(company_settings)
+        .where(eq(company_settings.company_id, activeCompanyId))
+        .limit(1);
+
+      if (settings?.aeat_pfx_data) {
+        // La empresa tiene certificado → generar XML y encolar
+        const issuedDateStr = issuedAt.toISOString().split('T')[0];
+        const importeTotal = totalCents / 100;
+        const baseImponible = subtotalCents / 100;
+        const cuotaRepercutida = vatTotalCents / 100;
+
+        // Mapear tipo de factura
+        let tipoFactura: 'F1' | 'F2' | 'R1' = 'F1';
+        if (isRectification) {
+          tipoFactura = 'R1'; // Rectificativa por diferencias (default)
+        } else if (seriesCode === 'F2') {
+          tipoFactura = 'F2'; // Simplificada
+        }
+
+        // Construir líneas de detalle IVA
+        const detalleIVA = formattedLines.map((l) => ({
+          tipoImpositivo: parseFloat(l.vat_percent),
+          baseImponible: (l.unit_price_cents * parseFloat(l.quantity)) / 100,
+          cuotaRepercutida:
+            ((l.unit_price_cents * parseFloat(l.quantity)) / 100) *
+            (parseFloat(l.vat_percent) / 100),
+        }));
+
+        const xmlBody = buildAltaXML({
+          nifEmisor: issuerTaxId,
+          nombreRazonSocialEmisor: membre.name,
+          ejercicio: currentYear,
+          periodo: String(issuedAt.getMonth() + 1).padStart(2, '0'),
+          numeroFactura: formattedInvoiceNumber,
+          fechaExpedicion: issuedDateStr,
+          tipoFactura,
+          claveRegimen: CLAVE_REGIMEN.GENERAL,
+          descripcionOperacion: `Factura ${formattedInvoiceNumber}`,
+          importeTotal,
+          baseImponible,
+          cuotaRepercutida,
+          tipoRetencion: irpfPercent || undefined,
+          detalleIVA,
+          destinatarios: [
+            {
+              nif: clientTaxId,
+              nombreRazonSocial: clientName,
+            },
+          ],
+          huella: currentHash,
+          enlaceAnterior:
+            prevHash && prevHash !== 'PREVIOUS_HASH_GENESIS'
+              ? {
+                  numSerieFactura: `${seriesCode}-${currentYear}-${String(nextNumber - 1).padStart(4, '0')}`,
+                  fechaExpedicionFactura: issuedAt.toISOString().split('T')[0],
+                  huellaAnterior: prevHash.toUpperCase(),
+                }
+              : undefined,
+        });
+
+        await addToQueue({
+          companyId: activeCompanyId,
+          invoiceId: nuevaFactura.id,
+          operationType: 'ALTA',
+          xmlBody,
+        });
+
+        verifactuQueued = true;
+      }
+    } catch (vfErr) {
+      // La factura ya está creada; si falla el encadenado a AEAT no rompemos la emisión
+      console.error('⚠️ Error encolando a Veri*factu (factura creada igualmente):', vfErr);
+    }
+
     // ENVÍO AUTOMÁTICO DIRECTO AL CLIENTE (SIN COPIA AL EMISOR)
     let emailSent = false;
     if (payload.sendEmail !== false && clientEmail) {
@@ -304,11 +388,12 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
     revalidatePath('/clientes');
     revalidatePath('/dashboard');
 
-    return { 
-      success: true, 
-      invoiceId: nuevaFactura.id, 
+    return {
+      success: true,
+      invoiceId: nuevaFactura.id,
       formattedNumber: formattedInvoiceNumber,
-      emailSent 
+      emailSent,
+      verifactuQueued,
     };
 
   } catch (error: any) {

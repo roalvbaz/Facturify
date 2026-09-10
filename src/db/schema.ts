@@ -266,8 +266,18 @@ export const company_settings = pgTable("company_settings", {
     .notNull()
     .unique(),
   theme_color: varchar("theme_color", { length: 7 }).default("#4f46e5"),
+  template_id: varchar("template_id", { length: 64 }).default("clasico-tradicional"),
   font_family: varchar("font_family", { length: 50 }).default("Roboto"),
   logo_url: text("logo_url"),
+
+  // Certificado digital Veri*factu (por empresa, cifrado AES-256-GCM)
+  aeat_pfx_data: text("aeat_pfx_data"), // Base64 del PFX cifrado
+  aeat_pfx_password: text("aeat_pfx_password"), // Contraseña del PFX cifrada
+  aeat_environment: varchar("aeat_environment", { length: 16 }).default("sandbox"), // 'sandbox' | 'production'
+  aeat_cert_subject: text("aeat_cert_subject"), // Subject del certificado (para mostrar info)
+  aeat_cert_valid_from: timestamp("aeat_cert_valid_from"), // Inicio validez del certificado
+  aeat_cert_valid_to: timestamp("aeat_cert_valid_to"), // Fin validez del certificado
+
   updated_at: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -298,6 +308,48 @@ export const invitations = pgTable(
     ),
   })
 );
+
+// ==========================================
+// 13. ENVÍOS Veri*factu A LA AEAT (QUEUE)
+// ==========================================
+// Registros pendientes de remitir a la AEAT vía SOAP con su estado de reintentos.
+export const verifactu_submissions = pgTable(
+  'verifactu_submissions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    company_id: uuid('company_id')
+      .references(() => companies.id, { onDelete: 'cascade' })
+      .notNull(),
+    invoice_id: uuid('invoice_id')
+      .references(() => invoices.id, { onDelete: 'cascade' })
+      .notNull(),
+    operation_type: varchar('operation_type', { length: 16 }).notNull(), // 'ALTA' | 'ANULACION'
+    xml_body: text('xml_body').notNull(),
+    status: varchar('status', { length: 20 }).default('PENDIENTE').notNull(), // PENDIENTE | ENVIADO | CONFORME | NO_CONFORME | ERROR
+    attempts: integer('attempts').default(0).notNull(),
+    max_attempts: integer('max_attempts').default(5).notNull(),
+    next_retry_at: timestamp('next_retry_at', { withTimezone: true }),
+    last_error: text('last_error'),
+    csv: varchar('csv', { length: 64 }),
+    aeat_response: jsonb('aeat_response'),
+    created_at: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updated_at: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => ({
+    queueReadyIdx: index('verifactu_queue_ready_idx').on(
+      table.status,
+      table.next_retry_at,
+      table.created_at
+    ),
+    invoiceIdx: index('verifactu_submission_invoice_idx').on(
+      table.invoice_id,
+      table.operation_type
+    ),
+  })
+);
+
+export type VerifactuSubmission = typeof verifactu_submissions.$inferSelect;
+export type NewVerifactuSubmission = typeof verifactu_submissions.$inferInsert;
 
 // Types inferidos
 export type CompanySettings = typeof company_settings.$inferSelect;

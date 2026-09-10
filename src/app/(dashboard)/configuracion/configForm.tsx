@@ -1,23 +1,125 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { updateCompanySettingsAction } from "@/actions/company.actions";
+import { useTheme } from "next-themes";
+import {
+  updateCompanySettingsAction,
+  updateTemplateAction,
+  saveCompanyCertificateAction,
+  removeCompanyCertificateAction,
+  getCompanyCertificateInfoAction,
+} from "@/actions/company.actions";
 import { showToast } from "@/lib/utils/toast";
-
-const PRESET_COLORS = [
-  { label: "Índigo", hex: "#4f46e5" },
-  { label: "Azul Océano", hex: "#0284c7" },
-  { label: "Esmeralda", hex: "#059669" },
-  { label: "Pizarra Oscuro", hex: "#0f172a" },
-  { label: "Rubí / Burdeos", hex: "#9f1239" },
-  { label: "Violeta", hex: "#7c3aed" },
-];
+import TemplateSelector from "@/components/templateSelector";
+import TemplatePreview from "@/components/templatePreview";
+import { getTemplateById, INVOICE_TEMPLATES } from "@/lib/invoice-templates";
 
 export default function ConfigForm({ company }: { company: any }) {
   const [loading, setLoading] = useState(false);
-  const [selectedColor, setSelectedColor] = useState(company.theme_color || "#4f46e5");
+  const [selectedColor] = useState(company.theme_color || "#4f46e5");
+  const [templateId, setTemplateId] = useState(company.template_id || "clasico-tradicional");
+  const [isTemplateSelectorOpen, setIsTemplateSelectorOpen] = useState(false);
+  const [savingTemplate, setSavingTemplate] = useState(false);
   const router = useRouter();
+  const { theme, setTheme } = useTheme();
+
+  // ── Estado del certificado AEAT ──
+  const [certInfo, setCertInfo] = useState<any>(null);
+  const [certLoading, setCertLoading] = useState(true);
+  const [uploadingCert, setUploadingCert] = useState(false);
+  const [pfxFile, setPfxFile] = useState<File | null>(null);
+  const [pfxPassword, setPfxPassword] = useState("");
+  const [aeatEnv, setAeatEnv] = useState<"sandbox" | "production">(
+    (company.aeat_environment as "sandbox" | "production") || "sandbox"
+  );
+
+  useEffect(() => {
+    getCompanyCertificateInfoAction()
+      .then((res) => {
+        if (res.success) setCertInfo(res.certificate);
+      })
+      .catch(() => {})
+      .finally(() => setCertLoading(false));
+  }, []);
+
+  const currentTemplate = getTemplateById(templateId);
+
+  const handleSelectTemplate = async (template: any) => {
+    setSavingTemplate(true);
+    try {
+      const res = await updateTemplateAction(template.id);
+      if (res.success) {
+        setTemplateId(template.id);
+        showToast.success(`Plantilla "${template.name}" aplicada`);
+        router.refresh();
+      } else {
+        showToast.error(res.error || "Error al guardar la plantilla");
+      }
+    } catch (err: any) {
+      showToast.error(err?.message || "Error inesperado");
+    } finally {
+      setSavingTemplate(false);
+    }
+  };
+
+  const THEME_OPTIONS = [
+    { value: 'light', label: 'Claro', icon: 'fa-sun', desc: 'Tema claro siempre' },
+    { value: 'dark', label: 'Oscuro', icon: 'fa-moon', desc: 'Tema oscuro siempre' },
+    { value: 'system', label: 'Sistema', icon: 'fa-desktop', desc: 'Según tu dispositivo' },
+  ];
+
+  // ── Handlers del certificado AEAT ──
+
+  const handleUploadCertificate = async () => {
+    if (!pfxFile) {
+      showToast.error("Selecciona un archivo .pfx o .p12");
+      return;
+    }
+    if (!pfxPassword.trim()) {
+      showToast.error("Introduce la contraseña del certificado");
+      return;
+    }
+    setUploadingCert(true);
+    try {
+      const fd = new FormData();
+      fd.append("pfx_file", pfxFile);
+      fd.append("pfx_password", pfxPassword);
+      fd.append("aeat_environment", aeatEnv);
+      const res = await saveCompanyCertificateAction(fd);
+      if (res.success) {
+        showToast.success("Certificado guardado correctamente");
+        setPfxFile(null);
+        setPfxPassword("");
+        // Recargar info del certificado
+        const info = await getCompanyCertificateInfoAction();
+        if (info.success) setCertInfo(info.certificate);
+        router.refresh();
+      } else {
+        showToast.error(res.error || "Error al guardar el certificado");
+      }
+    } catch (err: any) {
+      showToast.error(err?.message || "Error inesperado al subir el certificado");
+    } finally {
+      setUploadingCert(false);
+    }
+  };
+
+  const handleRemoveCertificate = async () => {
+    if (!confirm("¿Eliminar el certificado digital de la empresa?")) return;
+    try {
+      const res = await removeCompanyCertificateAction();
+      if (res.success) {
+        showToast.success("Certificado eliminado");
+        setCertInfo(null);
+        router.refresh();
+      } else {
+        showToast.error(res.error || "Error al eliminar");
+      }
+    } catch (err: any) {
+      showToast.error(err?.message || "Error inesperado");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -122,41 +224,239 @@ export default function ConfigForm({ company }: { company: any }) {
         </div>
       </div>
 
-      {/* Selector de Paleta Cerrada */}
+      {/* Selector de Plantilla de Factura */}
       <div>
-        <h4 style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--text-color)", margin: "0.5rem 0 0.75rem 0", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.5rem" }}>
-          Color de Acento de la Factura
+        <h4 style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--text-color)", margin: "0.5rem 0 0.75rem 0", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.5rem", display: "flex", alignItems: "center", gap: "8px" }}>
+          <i className="fas fa-file-invoice" style={{ color: "var(--text-muted)" }}></i> Plantilla de Factura
         </h4>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: "10px" }}>
-          {PRESET_COLORS.map((c) => (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            padding: "14px",
+            borderRadius: "10px",
+            border: "1px solid var(--border-color)",
+            backgroundColor: "var(--bg-color)",
+            cursor: savingTemplate ? "wait" : "pointer",
+            opacity: savingTemplate ? 0.7 : 1,
+            transition: "all 0.15s ease",
+          }}
+          onClick={() => !savingTemplate && setIsTemplateSelectorOpen(true)}
+        >
+          {/* Mini preview de la plantilla actual */}
+          <div style={{ flexShrink: 0, transform: "scale(0.75)", transformOrigin: "top left" }}>
+            {currentTemplate ? (
+              <TemplatePreview template={currentTemplate} />
+            ) : (
+              <div style={{ width: 150, height: 105, borderRadius: 4, border: "1px dashed var(--border-color)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.7rem", color: "var(--text-muted)" }}>
+                Sin plantilla
+              </div>
+            )}
+          </div>
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-color)", marginBottom: "2px" }}>
+              {currentTemplate?.name || "Clásico Tradicional"}
+            </div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "capitalize" }}>
+              {currentTemplate?.category || "clásico"} &middot; {INVOICE_TEMPLATES.length} plantillas disponibles
+            </div>
+            <div style={{ fontSize: "0.7rem", color: "var(--primary)", fontWeight: 600, marginTop: "6px" }}>
+              <i className="fas fa-palette" style={{ marginRight: "4px" }}></i>
+              {savingTemplate ? "Guardando..." : "Clic para cambiar plantilla"}
+            </div>
+          </div>
+
+          <div style={{ flexShrink: 0, color: "var(--text-muted)", fontSize: "1.2rem" }}>
+            <i className="fas fa-chevron-right"></i>
+          </div>
+        </div>
+      </div>
+
+      {/* ═══════════════════════════════════════════════════════════════
+          CERTIFICADO DIGITAL AEAT (Veri*factu)
+          ═══════════════════════════════════════════════════════════════ */}
+      <div>
+        <h4 style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--text-main)", margin: "0.5rem 0 0.75rem 0", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.5rem", display: "flex", alignItems: "center", gap: "8px" }}>
+          <i className="fas fa-certificate" style={{ color: "var(--text-muted)" }}></i> Certificado Digital AEAT (Veri*factu)
+        </h4>
+
+        {certLoading ? (
+          <div style={{ padding: "12px", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+            <i className="fas fa-spinner fa-spin" style={{ marginRight: "6px" }}></i> Cargando información del certificado…
+          </div>
+        ) : certInfo ? (
+          /* ── Certificado existente ── */
+          <div style={{
+            padding: "14px",
+            borderRadius: "10px",
+            border: certInfo.isExpired ? "1px solid #ef4444" : "1px solid #22c55e",
+            backgroundColor: certInfo.isExpired ? "rgba(239,68,68,0.06)" : "rgba(34,197,94,0.06)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+              <i className={`fas ${certInfo.isExpired ? "fa-exclamation-triangle" : "fa-check-circle"}`}
+                style={{ fontSize: "1.1rem", color: certInfo.isExpired ? "#ef4444" : "#22c55e" }}></i>
+              <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-main)" }}>
+                {certInfo.isExpired ? "Certificado caducado" : "Certificado activo"}
+              </span>
+              <span style={{
+                marginLeft: "auto",
+                fontSize: "0.7rem",
+                fontWeight: 600,
+                padding: "2px 8px",
+                borderRadius: "999px",
+                backgroundColor: certInfo.environment === "production" ? "#dc2626" : "#f59e0b",
+                color: "#fff",
+              }}>
+                {certInfo.environment === "production" ? "PRODUCCIÓN" : "SANDBOX"}
+              </span>
+            </div>
+            <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", lineHeight: 1.6 }}>
+              <div><strong>Subject:</strong> {certInfo.subject}</div>
+              <div><strong>Válido desde:</strong> {certInfo.validFrom} <strong>hasta:</strong> {certInfo.validTo}</div>
+            </div>
             <button
-              key={c.hex}
               type="button"
-              onClick={() => setSelectedColor(c.hex)}
+              onClick={handleRemoveCertificate}
+              style={{
+                marginTop: "10px",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                color: "#ef4444",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+              }}
+            >
+              <i className="fas fa-trash" style={{ marginRight: "4px" }}></i> Eliminar certificado
+            </button>
+          </div>
+        ) : (
+          /* ── Formulario de subida ── */
+          <div style={{
+            padding: "14px",
+            borderRadius: "10px",
+            border: "1px dashed var(--border-color)",
+            backgroundColor: "var(--bg-color)",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+          }}>
+            <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
+              Sube tu certificado digital en formato <strong>.pfx</strong> o <strong>.p12</strong> (PKCS#12) para que tu empresa pueda enviar facturas a la AEAT vía Veri*factu.
+              Cada empresa usa su propio certificado.
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              {/* Entorno AEAT */}
+              <div>
+                <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: "4px" }}>
+                  Entorno AEAT
+                </label>
+                <select
+                  value={aeatEnv}
+                  onChange={(e) => setAeatEnv(e.target.value as "sandbox" | "production")}
+                  className="form-control"
+                  style={{ height: "36px", fontSize: "0.8rem" }}
+                >
+                  <option value="sandbox">Sandbox (pruebas)</option>
+                  <option value="production">Producción</option>
+                </select>
+              </div>
+
+              {/* Archivo PFX */}
+              <div>
+                <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: "4px" }}>
+                  Certificado PFX/P12
+                </label>
+                <input
+                  type="file"
+                  accept=".pfx,.p12"
+                  onChange={(e) => setPfxFile(e.target.files?.[0] || null)}
+                  style={{
+                    height: "36px",
+                    fontSize: "0.78rem",
+                    display: "flex",
+                    alignItems: "center",
+                  }}
+                  className="form-control"
+                />
+              </div>
+            </div>
+
+            {/* Contraseña */}
+            <div>
+              <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: "4px" }}>
+                Contraseña del PFX
+              </label>
+              <input
+                type="password"
+                value={pfxPassword}
+                onChange={(e) => setPfxPassword(e.target.value)}
+                placeholder="Contraseña del certificado"
+                className="form-control"
+                style={{ height: "36px", fontSize: "0.8rem" }}
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={handleUploadCertificate}
+              disabled={uploadingCert || !pfxFile || !pfxPassword}
+              className="btn btn-primary"
+              style={{
+                alignSelf: "flex-start",
+                fontSize: "0.78rem",
+                fontWeight: 600,
+                padding: "0.4rem 1rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                opacity: uploadingCert || !pfxFile || !pfxPassword ? 0.6 : 1,
+                cursor: uploadingCert || !pfxFile || !pfxPassword ? "not-allowed" : "pointer",
+              }}
+            >
+              {uploadingCert
+                ? <><i className="fas fa-spinner fa-spin"></i> Validando y guardando…</>
+                : <><i className="fas fa-upload"></i> Subir certificado</>
+              }
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Selector de Tema */}
+      <div>
+        <h4 style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--text-main)", margin: "0.5rem 0 0.75rem 0", borderBottom: "1px solid var(--border-color)", paddingBottom: "0.5rem", display: "flex", alignItems: "center", gap: "8px" }}>
+          <i className="fas fa-palette" style={{ color: "var(--text-muted)" }}></i> Apariencia de la App
+        </h4>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "10px" }}>
+          {THEME_OPTIONS.map((opt) => (
+            <button
+              key={opt.value}
+              type="button"
+              onClick={() => setTheme(opt.value)}
               style={{
                 display: "flex",
+                flexDirection: "column",
                 alignItems: "center",
-                gap: "8px",
-                padding: "8px 12px",
-                borderRadius: "8px",
-                border: selectedColor === c.hex ? "2px solid var(--primary)" : "1px solid var(--border-color)",
-                backgroundColor: selectedColor === c.hex ? "rgba(14, 165, 233, 0.08)" : "var(--bg-color)",
+                gap: "6px",
+                padding: "14px 10px",
+                borderRadius: "10px",
+                border: theme === opt.value ? "2px solid var(--primary)" : "1px solid var(--border-color)",
+                backgroundColor: theme === opt.value ? "rgba(99, 102, 241, 0.08)" : "var(--card-bg)",
                 cursor: "pointer",
                 transition: "all 0.15s ease-in-out",
               }}
             >
-              <span
-                style={{
-                  width: "16px",
-                  height: "16px",
-                  borderRadius: "50%",
-                  backgroundColor: c.hex,
-                  flexShrink: 0,
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-                }}
-              />
-              <span style={{ fontSize: "0.75rem", fontWeight: selectedColor === c.hex ? 700 : 500, color: "var(--text-color)" }}>
-                {c.label}
+              <i className={`fas ${opt.icon}`} style={{ fontSize: "1.3rem", color: theme === opt.value ? "var(--primary)" : "var(--text-muted)" }}></i>
+              <span style={{ fontSize: "0.8rem", fontWeight: theme === opt.value ? 700 : 500, color: "var(--text-main)" }}>
+                {opt.label}
+              </span>
+              <span style={{ fontSize: "0.65rem", color: "var(--text-muted)", textAlign: "center" }}>
+                {opt.desc}
               </span>
             </button>
           ))}
@@ -165,16 +465,24 @@ export default function ConfigForm({ company }: { company: any }) {
 
       {/* Botón Guardar */}
       <div style={{ marginTop: "0.5rem", textAlign: "right" }}>
-        <button 
-          type="submit" 
-          disabled={loading} 
-          className="btn btn-primary" 
+        <button
+          type="submit"
+          disabled={loading}
+          className="btn btn-primary"
           style={{ fontWeight: 600, fontSize: "0.85rem", padding: "0.5rem 1.5rem", display: "inline-flex", alignItems: "center", gap: "6px" }}
         >
           {loading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-save"></i>}
           <span>Guardar Cambios</span>
         </button>
       </div>
+
+      {/* Modal selector de plantillas */}
+      <TemplateSelector
+        isOpen={isTemplateSelectorOpen}
+        currentTemplateId={templateId}
+        onSelect={handleSelectTemplate}
+        onClose={() => setIsTemplateSelectorOpen(false)}
+      />
     </form>
   );
 }

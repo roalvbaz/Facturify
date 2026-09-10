@@ -1,6 +1,6 @@
 import { db } from '@/db';
-import { invoices, invoice_lines, customers, company_settings } from '@/db/schema';
-import { eq, desc, and, ilike, gte, lte, or } from 'drizzle-orm';
+import { invoices, invoice_lines, customers, company_settings, verifactu_submissions } from '@/db/schema';
+import { eq, desc, and, ilike, gte, lte, or, inArray } from 'drizzle-orm';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
@@ -102,6 +102,34 @@ export default async function HistorialPage({
     .where(and(...conditions))
     .orderBy(desc(invoices.issued_at));
 
+  // Estado Veri*factu de las facturas listadas (una sola consulta a la cola).
+  // Se pasa como prop a la tabla para mostrar el badge sin N requests al cliente.
+  const invoiceIds = listaFacturas.map((f) => f.id);
+  const vfRows = invoiceIds.length
+    ? await db
+        .select()
+        .from(verifactu_submissions)
+        .where(inArray(verifactu_submissions.invoice_id, invoiceIds))
+    : [];
+  const vfByInvoice = new Map<string, (typeof vfRows)[number]>();
+  for (const row of vfRows) {
+    const prev = vfByInvoice.get(row.invoice_id);
+    if (!prev || new Date(row.created_at) > new Date(prev.created_at)) {
+      vfByInvoice.set(row.invoice_id, row);
+    }
+  }
+  const verifactuStatus: Record<
+    string,
+    { status?: string | null; csv?: string | null; last_error?: string | null }
+  > = {};
+  for (const [invId, row] of vfByInvoice) {
+    verifactuStatus[invId] = {
+      status: row.status,
+      csv: row.csv,
+      last_error: row.last_error,
+    };
+  }
+
   const empresa = {
     id: miEmpresa.id,
     name: miEmpresa.name,
@@ -110,6 +138,8 @@ export default async function HistorialPage({
     theme_color: settings?.theme_color || '#4f46e5',
     logo_url: settings?.logo_url || null,
   };
+
+  const templateId = settings?.template_id || 'clasico-tradicional';
 
   const todasLasLineas = await db.select().from(invoice_lines);
 
@@ -272,6 +302,8 @@ export default async function HistorialPage({
             facturas={facturasConLineas}
             empresa={empresa}
             settings={settings}
+            templateId={templateId}
+            verifactuStatus={verifactuStatus}
           />
         )}
       </div>

@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
+import { encryptSecret, decryptSecret } from "@/lib/verifactu/cipher";
+import { parsePfx, isCertificateValid } from "@/lib/verifactu/certificate";
 
 // 1. Obtener todas las empresas del usuario actual
 export async function getUserCompanies() {
@@ -53,6 +55,17 @@ export async function getActiveCompanyId() {
   return userCompanies[0].id;
 }
 
+// 2c. Obtener la configuración visual de la empresa activa (template_id, theme_color, logo_url)
+export async function getActiveCompanySettings() {
+  const companyId = await getActiveCompanyId();
+  const [settings] = await db
+    .select()
+    .from(company_settings)
+    .where(eq(company_settings.company_id, companyId))
+    .limit(1);
+  return settings || null;
+}
+
 // 2b. Server action para crear una NUEVA empresa y asociarla al usuario como OWNER
 export async function createCompanyAction(formData: FormData) {
   try {
@@ -89,6 +102,7 @@ export async function createCompanyAction(formData: FormData) {
       await tx.insert(company_settings).values({
         company_id: company.id,
         theme_color: "#4f46e5",
+        template_id: "clasico-tradicional",
       });
 
       return [company];
@@ -229,9 +243,254 @@ export async function updateCompanySettingsAction(formData: FormData) {
     revalidatePath("/configuracion");
     revalidatePath("/historial");
     revalidatePath("/nueva-factura");
-    
+
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || "Error al actualizar configuración" };
   }
+}
+
+// 5. Guardar la plantilla de factura seleccionada para la empresa activa
+export async function updateTemplateAction(templateId: string) {
+  try {
+    const companyId = await getActiveCompanyId();
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("No autenticado");
+
+    await db
+      .insert(company_settings)
+      .values({ company_id: companyId, template_id: templateId, updated_at: new Date() })
+      .onConflictDoUpdate({
+        target: company_settings.company_id,
+        set: { template_id: templateId, updated_at: new Date() },
+      });
+
+    await db.insert(audit_logs).values({
+      company_id: companyId,
+      user_id: user.id,
+      event_code: 'TEMPLATE_UPDATE',
+      description: `Cambio de plantilla de factura a: ${templateId}`,
+    });
+
+    revalidatePath("/(dashboard)", "layout");
+    revalidatePath("/configuracion");
+    revalidatePath("/nueva-factura");
+    revalidatePath("/historial");
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Error al guardar la plantilla" };
+  }
+}
+
+// ============================================================
+// CERTIFICADO DIGITAL Veri*factu (cada empresa sube el suyo)
+// ============================================================
+
+/**
+ * Guarda (o sustituye) el certificado PFX de la empresa activa.
+ * Los datos sensibles se cifran con AES-256-GCM antes de persistir.
+ *
+ * Se valida el PFX "en seco" (parseo + comprobación de validez) ANTES de
+ * guardarlo, para no persistir certificados corruptos o caducados.
+ */
+export async function saveCompanyCertificateAction(formData: FormData) {
+  try {
+    const companyId = await getActiveCompanyId();
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("No autenticado");
+
+    const pfxFile = formData.get("pfx_file") as File | null;
+    const password = (formData.get("pfx_password") as string)?.trim() || "";
+    const environment = (formData.get("aeat_environment") as string)?.trim() || "sandbox";
+    if (environment !== "sandbox" && environment !== "production") {
+      throw new Error("El entorno AEAT debe ser 'sandbox' o 'production'.");
+    }
+
+    if (!pfxFile) {
+      throw new Error("Selecciona un archivo de certificado (.pfx / .p12).");
+    }
+    if (pfxFile.size > 3 * 1024 * 1024) {
+      throw new Error("El certificado no puede superar 3 MB.");
+    }
+    if (!password) {
+      throw new Error("La contraseña del PFX es obligatoria.");
+    }
+
+    const buffer = Buffer.from(await pfxFile.arrayBuffer());
+    const pfxBase64 = buffer.toString("base64");
+
+    // Validación en seco: parsea y comprueba vigencia
+    let parsed;
+    try {
+      parsed = parsePfx({ pfxBase64, password });
+    } catch (err: any) {
+      return {
+        success: false,
+        error: `Certificado inválido: ${err?.message || "no se pudo leer"}`,
+      };
+    }
+
+    const now = new Date();
+    if (!isCertificateValid(parsed, now)) {
+      return {
+        success: false,
+        error: `El certificado está ${now < parsed.validFrom ? "aún no válido" : "caducado"} ` +
+          `(validez: ${parsed.validFrom.toISOString().slice(0, 10)} → ${parsed.validTo.toISOString().slice(0, 10)}).`,
+      };
+    }
+
+    // Cifrado y persistencia
+    const encPfx = encryptSecret(pfxBase64);
+    const encPassword = encryptSecret(password);
+
+    await db
+      .insert(company_settings)
+      .values({
+        company_id: companyId,
+        aeat_pfx_data: encPfx,
+        aeat_pfx_password: encPassword,
+        aeat_environment: environment,
+        aeat_cert_subject: parsed.subject,
+        aeat_cert_valid_from: parsed.validFrom,
+        aeat_cert_valid_to: parsed.validTo,
+        updated_at: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: company_settings.company_id,
+        set: {
+          aeat_pfx_data: encPfx,
+          aeat_pfx_password: encPassword,
+          aeat_environment: environment,
+          aeat_cert_subject: parsed.subject,
+          aeat_cert_valid_from: parsed.validFrom,
+          aeat_cert_valid_to: parsed.validTo,
+          updated_at: new Date(),
+        },
+      });
+
+    await db.insert(audit_logs).values({
+      company_id: companyId,
+      user_id: user.id,
+      event_code: 'AEAT_CERT_UPLOADED',
+      description: `Certificado digital Veri*factu actualizado (entorno ${environment}).`,
+      metadata: { cn: parsed.commonName, subject: parsed.subject },
+    });
+
+    revalidatePath("/(dashboard)", "layout");
+    revalidatePath("/configuracion");
+
+    return {
+      success: true,
+      certificate: {
+        commonName: parsed.commonName,
+        issuer: parsed.issuer,
+        subject: parsed.subject,
+        validFrom: parsed.validFrom.toISOString().slice(0, 10),
+        validTo: parsed.validTo.toISOString().slice(0, 10),
+        environment,
+      },
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Error al guardar el certificado" };
+  }
+}
+
+/** Elimina el certificado digital de la empresa activa */
+export async function removeCompanyCertificateAction() {
+  try {
+    const companyId = await getActiveCompanyId();
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("No autenticado");
+
+    await db
+      .update(company_settings)
+      .set({
+        aeat_pfx_data: null,
+        aeat_pfx_password: null,
+        aeat_cert_subject: null,
+        aeat_cert_valid_from: null,
+        aeat_cert_valid_to: null,
+        updated_at: new Date(),
+      })
+      .where(eq(company_settings.company_id, companyId));
+
+    await db.insert(audit_logs).values({
+      company_id: companyId,
+      user_id: user.id,
+      event_code: 'AEAT_CERT_REMOVED',
+      description: 'Certificado digital Veri*factu eliminado.',
+    });
+
+    revalidatePath("/(dashboard)", "layout");
+    revalidatePath("/configuracion");
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Error al eliminar el certificado" };
+  }
+}
+
+/**
+ * Devuelve la información pública del certificado de la empresa activa
+ * (para mostrarlo en Configuración). NUNCA expone el PFX ni su contraseña.
+ */
+export async function getCompanyCertificateInfoAction() {
+  try {
+    const [settings] =
+      await db
+        .select()
+        .from(company_settings)
+        .where(eq(company_settings.company_id, await getActiveCompanyId()))
+        .limit(1);
+
+    if (!settings?.aeat_cert_subject) {
+      return { success: true, certificate: null };
+    }
+
+    const now = new Date();
+    const validFrom = settings.aeat_cert_valid_from ? new Date(settings.aeat_cert_valid_from) : null;
+    const validTo = settings.aeat_cert_valid_to ? new Date(settings.aeat_cert_valid_to) : null;
+
+    return {
+      success: true,
+      certificate: {
+        subject: settings.aeat_cert_subject,
+        environment: settings.aeat_environment || 'sandbox',
+        validFrom: validFrom?.toISOString().slice(0, 10) || null,
+        validTo: validTo?.toISOString().slice(0, 10) || null,
+        isExpired: validTo ? now > validTo : false,
+        isPending: validFrom ? now < validFrom : false,
+      },
+    };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Error al consultar el certificado" };
+  }
+}
+
+/**
+ * INTERNO (server-only): recupera el PFX descifrado de una empresa.
+ * Lo usan el cliente SOAP y el procesador de cola. No exponer vía server action.
+ */
+export async function getCompanyCertificateDecrypted(companyId: string): Promise<{
+  pfxBase64: string;
+  password: string;
+  environment: 'sandbox' | 'production';
+} | null> {
+  const [settings] = await db
+    .select()
+    .from(company_settings)
+    .where(eq(company_settings.company_id, companyId))
+    .limit(1);
+
+  if (!settings?.aeat_pfx_data) return null;
+
+  return {
+    pfxBase64: decryptSecret(settings.aeat_pfx_data),
+    password: settings.aeat_pfx_password ? decryptSecret(settings.aeat_pfx_password) : '',
+    environment: (settings.aeat_environment || 'sandbox') as 'sandbox' | 'production',
+  };
 }

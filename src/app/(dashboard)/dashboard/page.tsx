@@ -11,7 +11,6 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function DashboardPage() {
-  // 1. Identificar usuario en Supabase Auth
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -19,7 +18,6 @@ export default async function DashboardPage() {
     redirect('/login');
   }
 
-  // 2. Obtener empresa activa del usuario
   const userCompanies = await getUserCompanies();
 
   if (userCompanies.length === 0) {
@@ -31,7 +29,6 @@ export default async function DashboardPage() {
 
   const companyId = miEmpresa.id;
 
-  // 3. Consultar facturas de la empresa
   const facturas = await db
     .select({
       id: invoices.id,
@@ -47,7 +44,6 @@ export default async function DashboardPage() {
     .where(eq(invoices.company_id, companyId))
     .orderBy(desc(invoices.issued_at));
 
-  // 4. Calcular totales
   const now = new Date();
   const currentMonth = now.getMonth();
   const currentYear = now.getFullYear();
@@ -72,7 +68,6 @@ export default async function DashboardPage() {
     }
   });
 
-  // 5. Preparar arrays requeridos por IngresosChart (labels, pagado, pendiente)
   const meses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   const labels: string[] = [];
   const pagadoMap: { [key: string]: number } = {};
@@ -104,7 +99,6 @@ export default async function DashboardPage() {
   const pagado = labels.map((k) => parseFloat(pagadoMap[k].toFixed(2)));
   const pendiente = labels.map((k) => parseFloat(pendienteMap[k].toFixed(2)));
 
-  // 6. Facturas pendientes con cálculo de vencimiento
   const facturasPendientes = facturas
     .filter((f) => f.status !== 'Pagada')
     .slice(0, 5)
@@ -128,65 +122,140 @@ export default async function DashboardPage() {
       };
     });
 
+  const metrics = [
+    {
+      label: 'Total Cobrado',
+      value: `${(totalCobradoCents / 100).toFixed(2)} €`,
+      icon: 'fa-check-circle',
+      iconBg: 'rgba(16,185,129,0.12)',
+      iconColor: '#10b981',
+      borderColor: '#10b981',
+    },
+    {
+      label: 'Pendiente Cobro',
+      value: `${(totalPendienteCents / 100).toFixed(2)} €`,
+      icon: 'fa-clock',
+      iconBg: 'rgba(245,158,11,0.12)',
+      iconColor: '#f59e0b',
+      borderColor: '#f59e0b',
+    },
+    {
+      label: 'Facturado Mes',
+      value: `${(facturadoMesCents / 100).toFixed(2)} €`,
+      icon: 'fa-calendar-alt',
+      iconBg: 'rgba(14,165,233,0.12)',
+      iconColor: '#0ea5e9',
+      borderColor: '#0ea5e9',
+    },
+    {
+      label: 'Total Facturas',
+      value: String(facturas.length),
+      icon: 'fa-file-invoice',
+      iconBg: 'rgba(139,92,246,0.12)',
+      iconColor: '#8b5cf6',
+      borderColor: '#8b5cf6',
+    },
+  ];
+
   return (
     <div>
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-color)', margin: '0 0 0.35rem 0' }}>
-          Resumen Financiero - {miEmpresa.name}
-        </h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', margin: 0 }}>
-          Métricas e ingresos de tu empresa en tiempo real (Rol: {miEmpresa.role}).
-        </p>
+      {/* Header */}
+      <div style={{ marginBottom: '1.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
+          <div style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '10px',
+            background: 'linear-gradient(135deg, #0ea5e9, #0284c7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#ffffff',
+            fontSize: '0.95rem',
+            flexShrink: 0,
+          }}>
+            <i className="fas fa-chart-pie"></i>
+          </div>
+          <div>
+            <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-color)', margin: 0, lineHeight: '1.2' }}>
+              Resumen Financiero
+            </h1>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
+              {miEmpresa.name} &middot; Rol: {miEmpresa.role}
+            </p>
+          </div>
+        </div>
       </div>
 
-      {/* Tarjetas de Resumen */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1.25rem', marginBottom: '2rem' }}>
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', margin: '0 0 0.5rem 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Total Cobrado
-          </p>
-          <h3 style={{ fontSize: '1.85rem', fontWeight: 800, color: '#10b981', margin: 0 }}>
-            {(totalCobradoCents / 100).toFixed(2)} €
-          </h3>
-        </div>
-        
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', margin: '0 0 0.5rem 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Pendiente Cobro
-          </p>
-          <h3 style={{ fontSize: '1.85rem', fontWeight: 800, color: '#f59e0b', margin: 0 }}>
-            {(totalPendienteCents / 100).toFixed(2)} €
-          </h3>
-        </div>
-        
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', margin: '0 0 0.5rem 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Facturado Mes
-          </p>
-          <h3 style={{ fontSize: '1.85rem', fontWeight: 800, color: '#0ea5e9', margin: 0 }}>
-            {(facturadoMesCents / 100).toFixed(2)} €
-          </h3>
-        </div>
-        
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', margin: '0 0 0.5rem 0', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Total Facturas
-          </p>
-          <h3 style={{ fontSize: '1.85rem', fontWeight: 800, color: 'var(--text-color)', margin: 0 }}>
-            {facturas.length}
-          </h3>
-        </div>
+      {/* Tarjetas de Métricas */}
+      <div className="stagger-children" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '1.75rem' }}>
+        {metrics.map((m) => (
+          <div
+            key={m.label}
+            className="animate-fade-in"
+            style={{
+              backgroundColor: 'var(--card-bg)',
+              border: '1px solid var(--border-color)',
+              borderLeft: `3px solid ${m.borderColor}`,
+              borderRadius: '12px',
+              padding: '1.25rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '14px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+              transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+            }}
+          >
+            <div style={{
+              width: '44px',
+              height: '44px',
+              borderRadius: '12px',
+              backgroundColor: m.iconBg,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}>
+              <i className={`fas ${m.icon}`} style={{ fontSize: '1.1rem', color: m.iconColor }}></i>
+            </div>
+            <div>
+              <p style={{
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                color: 'var(--text-muted)',
+                margin: '0 0 2px 0',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em',
+              }}>
+                {m.label}
+              </p>
+              <h3 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-color)', margin: 0, lineHeight: '1.2' }}>
+                {m.value}
+              </h3>
+            </div>
+          </div>
+        ))}
       </div>
 
       {/* Gráfico y Facturas Pendientes */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.5rem' }}>
-        <div className="card" style={{ padding: '1.5rem' }}>
-          <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-color)', marginBottom: '1.25rem', marginTop: 0 }}>
-            Evolución de Ingresos
-          </h4>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1.25rem' }}>
+        {/* Gráfico */}
+        <div style={{
+          backgroundColor: 'var(--card-bg)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '12px',
+          padding: '1.5rem',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '1.25rem' }}>
+            <i className="fas fa-chart-bar" style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}></i>
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-color)', margin: 0 }}>
+              Evolución de Ingresos
+            </h4>
+          </div>
           {facturas.length === 0 ? (
-            <div style={{ height: '280px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-color)', borderRadius: '8px', border: '1px dashed var(--border-color)' }}>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>No hay suficientes datos para generar el gráfico</p>
+            <div style={{ height: '280px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-color)', borderRadius: '10px', border: '1px dashed var(--border-color)' }}>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No hay suficientes datos para generar el gráfico</p>
             </div>
           ) : (
             <div style={{ height: '280px', position: 'relative' }}>
@@ -194,13 +263,25 @@ export default async function DashboardPage() {
             </div>
           )}
         </div>
-        
-        <div className="card" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column' }}>
+
+        {/* Facturas Pendientes */}
+        <div style={{
+          backgroundColor: 'var(--card-bg)',
+          border: '1px solid var(--border-color)',
+          borderRadius: '12px',
+          padding: '1.5rem',
+          display: 'flex',
+          flexDirection: 'column',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+        }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-color)', margin: 0 }}>
-              Pendientes de Cobro
-            </h4>
-            <Link href="/historial?status=Pendiente" style={{ fontSize: '0.8rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <i className="fas fa-clock" style={{ color: '#f59e0b', fontSize: '0.9rem' }}></i>
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-color)', margin: 0 }}>
+                Pendientes de Cobro
+              </h4>
+            </div>
+            <Link href="/historial?status=Pendiente" style={{ fontSize: '0.75rem', color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}>
               Ver todas &rarr;
             </Link>
           </div>
@@ -208,73 +289,89 @@ export default async function DashboardPage() {
           <div style={{ flex: 1 }}>
             {facturasPendientes.length === 0 ? (
               <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '1.5rem' }}>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
-                  ¡Al día! No tienes facturas pendientes de cobro.
-                </p>
+                <div>
+                  <i className="fas fa-check-circle" style={{ fontSize: '2rem', color: '#10b981', opacity: 0.5, marginBottom: '8px', display: 'block' }}></i>
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
+                    ¡Al día! No tienes facturas pendientes.
+                  </p>
+                </div>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {facturasPendientes.map((f) => {
-                  let badgeBg = '#f1f5f9';
-                  let badgeColor = '#475569';
+                  let badgeBg = 'rgba(100,116,139,0.1)';
+                  let badgeColor = '#64748b';
                   let badgeText = 'Sin fecha';
+                  let dotColor = '#94a3b8';
 
                   if (f.diasRestantes !== null) {
                     if (f.diasRestantes < 0) {
-                      badgeBg = '#fee2e2';
+                      badgeBg = 'rgba(239,68,68,0.1)';
                       badgeColor = '#ef4444';
                       badgeText = `Vencida (${Math.abs(f.diasRestantes)}d)`;
+                      dotColor = '#ef4444';
                     } else if (f.diasRestantes === 0) {
-                      badgeBg = '#fef3c7';
+                      badgeBg = 'rgba(245,158,11,0.1)';
                       badgeColor = '#d97706';
                       badgeText = 'Vence hoy';
+                      dotColor = '#f59e0b';
                     } else if (f.diasRestantes <= 7) {
-                      badgeBg = '#fef3c7';
+                      badgeBg = 'rgba(245,158,11,0.1)';
                       badgeColor = '#d97706';
-                      badgeText = `Vence en ${f.diasRestantes}d`;
+                      badgeText = `${f.diasRestantes}d`;
+                      dotColor = '#f59e0b';
                     } else {
-                      badgeBg = '#dcfce7';
+                      badgeBg = 'rgba(16,163,74,0.1)';
                       badgeColor = '#16a34a';
-                      badgeText = `${f.diasRestantes} días restantes`;
+                      badgeText = `${f.diasRestantes}d`;
+                      dotColor = '#16a34a';
                     }
                   }
 
                   return (
-                    <div 
-                      key={f.id} 
-                      style={{ 
-                        display: 'flex', 
-                        justifyContent: 'space-between', 
-                        alignItems: 'center', 
-                        padding: '10px 12px', 
-                        borderRadius: '8px', 
-                        backgroundColor: 'var(--bg-color)', 
-                        border: '1px solid var(--border-color)' 
+                    <div
+                      key={f.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '10px 12px',
+                        borderRadius: '10px',
+                        backgroundColor: 'var(--bg-color)',
+                        border: '1px solid var(--border-color)',
+                        transition: 'border-color 0.15s',
                       }}
                     >
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <strong style={{ fontSize: '0.85rem', color: 'var(--text-color)' }}>
-                            {f.formatted_number}
-                          </strong>
-                          <span
-                            style={{
-                              fontSize: '0.7rem',
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+                        <div style={{
+                          width: '8px',
+                          height: '8px',
+                          borderRadius: '50%',
+                          backgroundColor: dotColor,
+                          flexShrink: 0,
+                        }}></div>
+                        <div style={{ overflow: 'hidden' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <strong style={{ fontSize: '0.82rem', color: 'var(--text-color)' }}>
+                              {f.formatted_number}
+                            </strong>
+                            <span style={{
+                              fontSize: '0.65rem',
                               fontWeight: 700,
                               padding: '2px 6px',
                               borderRadius: '4px',
                               backgroundColor: badgeBg,
                               color: badgeColor,
-                            }}
-                          >
-                            {badgeText}
+                            }}>
+                              {badgeText}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginTop: '1px' }}>
+                            {f.customer_name || 'Cliente'}
                           </span>
                         </div>
-                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginTop: '2px' }}>
-                          {f.customer_name || 'Cliente'}
-                        </span>
                       </div>
-                      <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#f59e0b' }}>
+                      <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#f59e0b', flexShrink: 0, marginLeft: '8px' }}>
                         {((f.total_cents || 0) / 100).toFixed(2)} €
                       </span>
                     </div>

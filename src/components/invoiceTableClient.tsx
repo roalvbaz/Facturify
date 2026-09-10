@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type CSSProperties } from 'react';
 import InvoiceModalClient from '@/components/invoiceModalClient';
 import InvoiceStatusButton from '@/components/invoiceStatusButton';
 import { sendPaymentReminderAction } from '@/actions/reminder.actions';
@@ -20,14 +20,80 @@ const AVAILABLE_COLUMNS: ColumnConfig[] = [
   { id: 'breakdown', label: 'Base & IVA', defaultVisible: false },
 ];
 
+interface VerifactuStatus {
+  status?: string | null;
+  csv?: string | null;
+  last_error?: string | null;
+}
+
+/** Badge del estado del envío a la AEAT (Veri*factu) */
+function VerifactuBadge({ vf }: { vf?: VerifactuStatus }) {
+  if (!vf) {
+    return (
+      <span style={{ opacity: 0.45, fontSize: '0.75rem', color: 'var(--text-muted)' }} title="Esta factura no se ha enviado a la AEAT">
+        —
+      </span>
+    );
+  }
+  const status = (vf.status || '').toUpperCase();
+  const base: CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    fontSize: '0.7rem',
+    fontWeight: 700,
+    padding: '3px 8px',
+    borderRadius: '999px',
+    whiteSpace: 'nowrap',
+  };
+
+  if (status === 'CONFORME') {
+    return (
+      <span style={{ ...base, backgroundColor: '#d1fae5', color: '#047857' }} title={`AEAT conforme · CSV: ${vf.csv || '—'}`}>
+        ✓ CONFORME
+      </span>
+    );
+  }
+  if (status === 'ENVIADO') {
+    return (
+      <span style={{ ...base, backgroundColor: '#dbeafe', color: '#1d4ed8' }} title="Enviándose ahora mismo a la AEAT">
+        ↻ Enviando
+      </span>
+    );
+  }
+  if (status === 'PENDIENTE') {
+    return (
+      <span style={{ ...base, backgroundColor: '#fef3c7', color: '#b45309' }} title="En cola de envío · reintento automático">
+        ⏳ En cola
+      </span>
+    );
+  }
+  if (status === 'ERROR' || status === 'NO_CONFORME') {
+    return (
+      <span style={{ ...base, backgroundColor: '#fee2e2', color: '#b91c1c' }} title={vf.last_error || 'Rechazado por la AEAT'}>
+        ✕ {status === 'NO_CONFORME' ? 'NO CONFORME' : 'ERROR'}
+      </span>
+    );
+  }
+  return (
+    <span style={{ ...base, backgroundColor: '#e5e7eb', color: '#374151' }} title={vf.last_error || ''}>
+      {status}
+    </span>
+  );
+}
+
 export default function InvoicesTableClient({
   facturas,
   empresa,
   settings,
+  templateId,
+  verifactuStatus,
 }: {
   facturas: any[];
   empresa: any;
   settings?: any;
+  templateId?: string;
+  verifactuStatus?: Record<string, VerifactuStatus>;
 }) {
   const [visibleColumns, setVisibleColumns] = useState<{ [key: string]: boolean }>({});
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -103,7 +169,7 @@ export default function InvoicesTableClient({
             gap: '6px',
             fontSize: '0.8rem',
             padding: '0.4rem 0.8rem',
-            backgroundColor: '#ffffff',
+            backgroundColor: 'var(--card-bg)',
             border: '1px solid var(--border-color)',
             color: 'var(--text-color)',
             cursor: 'pointer',
@@ -126,7 +192,7 @@ export default function InvoicesTableClient({
                 top: 'calc(100% + 4px)',
                 right: '1.25rem',
                 width: '240px',
-                backgroundColor: '#ffffff',
+                backgroundColor: 'var(--card-bg)',
                 border: '1px solid var(--border-color)',
                 borderRadius: '8px',
                 boxShadow: '0 12px 24px -4px rgba(0,0,0,0.15)',
@@ -180,6 +246,7 @@ export default function InvoicesTableClient({
               
               <th style={{ textAlign: 'right' }}>Total</th>
               <th style={{ textAlign: 'center' }}>Estado</th>
+              <th style={{ textAlign: 'center' }}>Veri*factu</th>
               <th style={{ textAlign: 'center' }}>Acciones</th>
             </tr>
           </thead>
@@ -264,6 +331,10 @@ export default function InvoicesTableClient({
                   </td>
 
                   <td style={{ textAlign: 'center' }}>
+                    <VerifactuBadge vf={verifactuStatus?.[f.id]} />
+                  </td>
+
+                  <td style={{ textAlign: 'center' }}>
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                       {isPendiente && (
                         <button
@@ -288,7 +359,7 @@ export default function InvoicesTableClient({
                         </button>
                       )}
 
-                      <InvoiceModalClient factura={f} empresa={empresa} settings={settings} />
+                      <InvoiceModalClient factura={f} empresa={empresa} settings={settings} templateId={templateId} />
                     </div>
                   </td>
                 </tr>

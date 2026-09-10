@@ -8,19 +8,21 @@ import InvoicePDFTemplate from '@/components/invoicePDFTemplate';
 import { sendInvoiceByEmailAction } from '@/actions/email.actions';
 import { showToast } from '@/lib/utils/toast';
 
-export default function InvoiceModalClient({ 
-  factura, 
+export default function InvoiceModalClient({
+  factura,
   empresa,
-  settings, 
+  settings,
+  templateId,
   variant = 'icon',
   isOpen: controlledIsOpen,
   onClose: controlledOnClose,
   onSave,
   saving = false
-}: { 
-  factura: any; 
-  empresa: any; 
+}: {
+  factura: any;
+  empresa: any;
   settings?: any;
+  templateId?: string;
   variant?: 'icon' | 'preview-only' | 'confirm-emit';
   isOpen?: boolean;
   onClose?: () => void;
@@ -142,15 +144,15 @@ export default function InvoiceModalClient({
   const modalContent = showModal ? (
     <div style={{ 
       position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, 
-      zIndex: 2147483647, backgroundColor: '#e2e8f0', display: 'flex', flexDirection: 'column' 
+      zIndex: 2147483647, backgroundColor: 'var(--bg-color)', display: 'flex', flexDirection: 'column'
     }}>
       {/* Cabecera del visor */}
       <div style={{ 
-        backgroundColor: 'white', padding: '1rem 2rem', borderBottom: '1px solid #cbd5e1', 
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', flexShrink: 0 
+        backgroundColor: 'var(--card-bg)', padding: '1rem 2rem', borderBottom: '1px solid var(--border-color)',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', flexShrink: 0
       }}>
         <div>
-          <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#0f172a', fontWeight: 800 }}>
+          <h3 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-main)', fontWeight: 800 }}>
             {variant === 'confirm-emit' 
               ? 'Revisión Previa a la Emisión' 
               : (variant === 'preview-only' ? 'Vista Previa del Borrador' : `Factura: ${factura.formatted_number}`)}
@@ -173,8 +175,8 @@ export default function InvoiceModalClient({
                 disabled={saving}
                 style={{ 
                   background: 'transparent', 
-                  color: '#475569', 
-                  border: '1px solid #cbd5e1', 
+                  color: '#475569',
+                  border: '1px solid var(--border-color)', 
                   padding: '8px 16px', 
                   borderRadius: '6px', 
                   cursor: saving ? 'not-allowed' : 'pointer', 
@@ -264,8 +266,8 @@ export default function InvoiceModalClient({
                 disabled={sendingEmail}
                 style={{ 
                   background: 'transparent', 
-                  color: '#0f172a', 
-                  border: '1px solid #cbd5e1', 
+                  color: 'var(--text-main)',
+                  border: '1px solid var(--border-color)', 
                   padding: '8px 14px', 
                   borderRadius: '6px', 
                   cursor: sendingEmail ? 'not-allowed' : 'pointer', 
@@ -326,7 +328,7 @@ export default function InvoiceModalClient({
       {/* Contenedor del documento */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '2rem', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
         <div style={{ width: '100%', maxWidth: '900px' }}>
-          <InvoicePDFTemplate factura={factura} empresa={empresa} settings={settings} />
+          <InvoicePDFTemplate factura={factura} empresa={empresa} settings={settings} templateId={templateId} />
         </div>
       </div>
 
@@ -350,7 +352,7 @@ export default function InvoiceModalClient({
             style={{
               width: '100%',
               maxWidth: '460px',
-              backgroundColor: '#ffffff',
+              backgroundColor: 'var(--card-bg)',
               borderRadius: '12px',
               padding: '1.5rem',
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.2)',
