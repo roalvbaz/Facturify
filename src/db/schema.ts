@@ -10,6 +10,7 @@ import {
   uuid,
   uniqueIndex,
   index,
+  primaryKey,
 } from 'drizzle-orm/pg-core';
 
 // ==========================================
@@ -239,6 +240,24 @@ export const audit_logs = pgTable('audit_logs', {
   ip_address: varchar('ip_address', { length: 64 }),
   timestamp: timestamp('timestamp').defaultNow().notNull(),
 });
+
+// ==========================================
+// 9b. CONTADORES DE SEGURIDAD (RATE LIMITING)
+// ==========================================
+// Contadores atómicos por (clave, acción, ventana) para limitar
+// intentos de login, envío de OTP, verificación de código, etc.
+export const security_counters = pgTable(
+  'security_counters',
+  {
+    key: text('key').notNull(), // p.ej. email normalizado o IP
+    action: varchar('action', { length: 64 }).notNull(), // p.ej. 'LOGIN_FAILED'
+    window_start: timestamp('window_start', { withTimezone: true }).notNull(),
+    count: integer('count').notNull().default(0),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.key, table.action, table.window_start] }),
+  })
+);
 
 // ==========================================
 // 10. CATALOGO DE PRODUCTOS / SERVICIOS

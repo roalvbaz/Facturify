@@ -1,4 +1,4 @@
-import Sidebar from '@/components/sidebar';
+import DashboardShell from '@/components/dashboardShell';
 import { createClient } from '@/lib/supabase/server';
 import { getUserCompanies, getActiveCompanyId } from '@/actions/company.actions';
 import { isAdminUser } from '@/lib/invitations';
@@ -30,18 +30,14 @@ export default async function DashboardLayout({
   const nombreEmpresa = activeCompany?.name || 'Empresa no asignada';
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', backgroundColor: '#f1f5f9' }}>
-      {/* Pasamos los datos como props al Sidebar de Cliente */}
-      <Sidebar
-        companies={companies}
-        activeCompanyId={activeCompanyId}
-        nombreEmpresa={nombreEmpresa}
-        emailUsuario={user.email || 'Usuario'}
-        isAdmin={isAdminUser(user.email)}
-      />
-      <main style={{ flexGrow: 1, padding: '2rem', height: '100vh', overflowY: 'auto' }}>
-        {children}
-      </main>
-    </div>
+    <DashboardShell
+      companies={companies}
+      activeCompanyId={activeCompanyId}
+      nombreEmpresa={nombreEmpresa}
+      emailUsuario={user.email || 'Usuario'}
+      isAdmin={isAdminUser(user.email)}
+    >
+      {children}
+    </DashboardShell>
   );
 }

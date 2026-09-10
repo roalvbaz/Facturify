@@ -590,17 +590,17 @@ export default function NuevaFacturaPage() {
               const lineTotal = lineSubtotal + lineVatAmount;
 
               return (
-                <div key={index} style={{ display: 'grid', gridTemplateColumns: '4fr 1fr 1.2fr 1.5fr 1fr 60px', gap: '8px', alignItems: 'center', background: 'var(--bg-color)', padding: '0.4rem 0.6rem', borderRadius: '0.375rem', border: '1px solid var(--border-color)' }}>
+                <div key={index} className="invoice-line-grid">
                   <div>
-                    <input type="text" value={line.description} onChange={(e) => handleLineChange(index, 'description', e.target.value)} placeholder="Descripción del producto/servicio" className="form-control" style={{ height: '34px', fontSize: '0.85rem' }} required />
+                    <input type="text" value={line.description} onChange={(e) => handleLineChange(index, 'description', e.target.value)} placeholder="Descripción del producto/servicio" className="form-control" style={{ height: '34px', fontSize: '0.85rem', width: '100%' }} required />
                   </div>
-                  <div>
+                  <div data-label="Cantidad">
                     <input type="number" step="any" value={line.quantity} onChange={(e) => handleLineChange(index, 'quantity', e.target.value)} className="form-control" style={{ height: '34px', fontSize: '0.85rem' }} required />
                   </div>
-                  <div>
+                  <div data-label="Precio">
                     <input type="number" step="0.01" value={line.unit_price} onChange={(e) => handleLineChange(index, 'unit_price', e.target.value)} placeholder="Precio" className="form-control" style={{ height: '34px', fontSize: '0.85rem' }} required />
                   </div>
-                  <div>
+                  <div data-label="IVA">
                     <select value={line.vat_rate} onChange={(e) => handleLineChange(index, 'vat_rate', e.target.value)} className="form-control" style={{ height: '34px', fontSize: '0.8rem', padding: '0 4px' }}>
                       <option value="21">General (21%)</option>
                       <option value="10">Reducido (10%)</option>
@@ -608,16 +608,16 @@ export default function NuevaFacturaPage() {
                       <option value="0">Exento (0%)</option>
                     </select>
                   </div>
-                  <div style={{ textAlign: 'right', fontWeight: 700, fontSize: '0.85rem', paddingRight: '4px', color: 'var(--text-color)' }}>
+                  <div data-label="Total" style={{ textAlign: 'right', fontWeight: 700, fontSize: '0.85rem', paddingRight: '4px', color: 'var(--text-color)' }}>
                     {lineTotal.toFixed(2)} €
                   </div>
                   <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', alignItems: 'center' }}>
                     {!line.saved && line.description.trim() !== '' && (
-                      <button type="button" onClick={() => handleQuickSaveProduct(index)} style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: '1.1rem' }} title="Guardar este concepto en el catálogo">
+                      <button type="button" onClick={() => handleQuickSaveProduct(index)} style={{ background: 'none', border: 'none', color: '#6366f1', cursor: 'pointer', fontSize: '1.1rem', minHeight: '44px', minWidth: '44px' }} title="Guardar este concepto en el catálogo">
                         <i className="fas fa-save"></i>
                       </button>
                     )}
-                    <button type="button" onClick={() => removeLine(index)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '1rem' }} title="Vaciar/Eliminar línea">
+                    <button type="button" onClick={() => removeLine(index)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '1rem', minHeight: '44px', minWidth: '44px' }} title="Vaciar/Eliminar línea">
                       <i className="fas fa-trash"></i>
                     </button>
                   </div>

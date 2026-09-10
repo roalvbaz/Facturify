@@ -199,7 +199,7 @@ export default function EmpresasManager({
         )}
 
         <form onSubmit={handleCreate}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+          <div className="responsive-grid">
             <div>
               <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-color)', marginBottom: '0.4rem' }}>
                 Nombre / Razón Social *

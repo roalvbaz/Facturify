@@ -148,7 +148,7 @@ export default async function ProductosPage({
             <p style={{ margin: '5px 0 0 0', fontSize: '0.85rem' }}>Utiliza el formulario superior para añadir tu primer producto o servicio.</p>
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+          <table className="mobile-card-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-color)' }}>
                 <th style={{ padding: '0.8rem 1.25rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', fontSize: '0.7rem' }}>Concepto</th>
@@ -161,21 +161,21 @@ export default async function ProductosPage({
             <tbody>
               {items.map((item) => (
                 <tr key={item.id} style={{ borderBottom: '1px solid var(--border-color)', transition: 'background 0.2s' }}>
-                  <td style={{ padding: '0.8rem 1.25rem', fontWeight: 600, color: 'var(--text-color)' }}>
+                  <td data-label="Concepto" style={{ padding: '0.8rem 1.25rem', fontWeight: 600, color: 'var(--text-color)' }}>
                     {item.name}
                   </td>
-                  <td style={{ padding: '0.8rem 1.25rem', color: 'var(--text-muted)' }}>
+                  <td data-label="Descripción" style={{ padding: '0.8rem 1.25rem', color: 'var(--text-muted)', wordBreak: 'break-word' }}>
                     {item.description || "—"}
                   </td>
-                  <td style={{ padding: '0.8rem 1.25rem', fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-color)' }}>
+                  <td data-label="Precio Base" style={{ padding: '0.8rem 1.25rem', fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-color)' }}>
                     {(item.price_cents / 100).toLocaleString("es-ES", { style: "currency", currency: "EUR" })}
                   </td>
-                  <td style={{ padding: '0.8rem 1.25rem', textAlign: 'center' }}>
+                  <td data-label="IVA" style={{ padding: '0.8rem 1.25rem', textAlign: 'center' }}>
                     <span style={{ padding: '2px 8px', borderRadius: '4px', backgroundColor: 'var(--bg-color)', border: '1px solid var(--border-color)', fontSize: '0.75rem', fontWeight: 600 }}>
                       {item.default_vat}%
                     </span>
                   </td>
-                  <td style={{ padding: '0.8rem 1.25rem', textAlign: 'center' }}>
+                  <td data-label="Acciones" style={{ padding: '0.8rem 1.25rem', textAlign: 'center' }}>
                     <DeleteProductButton productId={item.id} productName={item.name} />
                   </td>
                 </tr>

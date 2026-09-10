@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { LoginSchema } from '@/lib/validations/invoice';
 import { verifyRecaptcha } from '@/lib/recaptcha';
 import { createServerClient, type CookieOptions } from '@supabase/ssr';
-import { db } from '@/db';
-import { audit_logs } from '@/db/schema';
+import { logAuditEvent, getClientIp } from '@/lib/audit';
+import { checkRateLimit, peekRateLimit } from '@/lib/rateLimit';
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,6 +50,29 @@ export async function POST(request: NextRequest) {
       }
     );
 
+    // 3.5 Anti fuerza bruta: máx. 5 intentos fallidos por email en 15 min.
+    //    Comprobamos sin incrementar (peek) para no contar el intento actual.
+    const rlKey = `login:${email.toLowerCase()}`;
+    const rl = await peekRateLimit({
+      key: rlKey,
+      action: 'LOGIN_FAILED',
+      max: 5,
+      windowSeconds: 15 * 60,
+    });
+
+    if (!rl.allowed) {
+      await logAuditEvent({
+        eventCode: 'RATE_LIMIT_TRIGGERED',
+        description: `Acceso bloqueado del email ${email} por exceso de intentos fallidos`,
+        metadata: { email },
+        ipAddress: getClientIp(request),
+      });
+      return NextResponse.json(
+        { error: 'Demasiados intentos fallidos. Espera unos minutos y vuelve a intentarlo.' },
+        { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds || 60) } }
+      );
+    }
+
     // 4. Iniciar sesión en Supabase
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -57,18 +80,43 @@ export async function POST(request: NextRequest) {
     });
 
     if (error) {
+      // Incrementamos el contador de fallidos (solo en fallo).
+      const rlNow = await checkRateLimit({
+        key: rlKey,
+        action: 'LOGIN_FAILED',
+        max: 5,
+        windowSeconds: 15 * 60,
+      });
+
+      await logAuditEvent({
+        eventCode: 'USER_LOGIN_FAILED',
+        description: `Intento de inicio de sesión fallido para ${email}`,
+        metadata: { email, reason: error.message },
+        ipAddress: getClientIp(request),
+      });
+
+      if (!rlNow.allowed) {
+        await logAuditEvent({
+          eventCode: 'RATE_LIMIT_TRIGGERED',
+          description: `Acceso bloqueado del email ${email} por exceso de intentos fallidos`,
+          metadata: { email },
+          ipAddress: getClientIp(request),
+        });
+        return NextResponse.json(
+          { error: 'Demasiados intentos fallidos. Espera unos minutos y vuelve a intentarlo.' },
+          { status: 429, headers: { 'Retry-After': String(rlNow.retryAfterSeconds || 60) } }
+        );
+      }
+
       return NextResponse.json({ error: error.message }, { status: 401 });
     }
 
-    // 5. GUARDADO SIGILOSO EN LA CAJA NEGRA (AUDIT LOG)
-    // Extraemos la IP del cliente de las cabeceras de la petición
-    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'IP Desconocida';
-    
-    await db.insert(audit_logs).values({
-      user_id: data.user.id,
-      event_code: 'USER_LOGIN',
+    // 5. GUARDADO SILENCIOSO EN LA CAJA NEGRA (AUDIT LOG) — nunca bloquea el login.
+    await logAuditEvent({
+      eventCode: 'USER_LOGIN',
       description: 'Inicio de sesión exitoso en el sistema',
-      ip_address: ip,
+      userId: data.user.id,
+      ipAddress: getClientIp(request),
     });
 
     // 6. Devolver respuesta manteniendo las cookies de sesión intactas

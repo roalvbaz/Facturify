@@ -145,10 +145,7 @@ export default function InvoiceModalClient({
       zIndex: 2147483647, backgroundColor: '#e2e8f0', display: 'flex', flexDirection: 'column' 
     }}>
       {/* Cabecera del visor */}
-      <div style={{ 
-        backgroundColor: 'white', padding: '1rem 2rem', borderBottom: '1px solid #cbd5e1', 
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.05)', flexShrink: 0 
-      }}>
+      <div className="invoice-modal-header">
         <div>
           <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#0f172a', fontWeight: 800 }}>
             {variant === 'confirm-emit' 
@@ -163,7 +160,7 @@ export default function InvoiceModalClient({
         </div>
         
         {/* Botoneras */}
-        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+        <div className="invoice-modal-actions">
           
           {variant === 'confirm-emit' && (
             <>
@@ -324,7 +321,7 @@ export default function InvoiceModalClient({
       </div>
       
       {/* Contenedor del documento */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '2rem', display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
+      <div className="invoice-modal-body">
         <div style={{ width: '100%', maxWidth: '900px' }}>
           <InvoicePDFTemplate factura={factura} empresa={empresa} settings={settings} />
         </div>

@@ -11,17 +11,26 @@ export default function Sidebar({
   nombreEmpresa,
   emailUsuario,
   isAdmin,
+  isOpen,
+  onClose,
 }: {
   companies: Array<{ id: string; name: string; tax_id: string; role: string }>;
   activeCompanyId: string;
   nombreEmpresa: string;
   emailUsuario: string;
   isAdmin?: boolean;
+  isOpen?: boolean;
+  onClose?: () => void;
 }) {
   const pathname = usePathname();
 
   // Función auxiliar para saber si el link está activo
   const isActive = (path: string) => pathname?.startsWith(path);
+
+  // Al navegar en móvil, cerramos el menú
+  const handleNav = () => {
+    if (isOpen && onClose) onClose();
+  };
 
   // Estilo base para los enlaces
   const linkStyle = (active: boolean) => ({
@@ -38,7 +47,7 @@ export default function Sidebar({
   });
 
   return (
-    <aside style={{
+    <aside className={`sidebar ${isOpen ? 'open' : ''}`} style={{
       width: '260px',
       height: '100vh',
       backgroundColor: '#1e293b',
@@ -50,11 +59,11 @@ export default function Sidebar({
 
       {/* 1. Cabecera con Nombre de Empresa + Engranaje de Configuración */}
       <div style={{ padding: '1.5rem', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', overflow: 'hidden', flex: 1, minWidth: 0 }}>
           <div style={{ backgroundColor: '#0ea5e9', width: '36px', height: '36px', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', flexShrink: 0 }}>
             <i className="fas fa-building"></i>
           </div>
-          <div style={{ overflow: 'hidden' }}>
+          <div style={{ overflow: 'hidden', flex: 1 }}>
             <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {nombreEmpresa}
             </h2>
@@ -65,6 +74,7 @@ export default function Sidebar({
         <Link
           href="/configuracion"
           title="Configuración de la empresa"
+          onClick={handleNav}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -81,6 +91,30 @@ export default function Sidebar({
         >
           <i className="fas fa-cog" style={{ fontSize: '0.9rem' }}></i>
         </Link>
+
+        {/* Botón cerrar menú (solo móvil) */}
+        <button
+          type="button"
+          className="sidebar-close"
+          onClick={onClose}
+          aria-label="Cerrar menú"
+          style={{
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '32px',
+            height: '32px',
+            borderRadius: '8px',
+            backgroundColor: '#334155',
+            color: '#cbd5e1',
+            border: 'none',
+            flexShrink: 0,
+            cursor: 'pointer',
+            fontSize: '1rem',
+            transition: 'all 0.2s ease-in-out',
+          }}
+        >
+          <i className="fas fa-times"></i>
+        </button>
       </div>
 
       {/* 1b. Selector de empresa activa */}
@@ -90,30 +124,30 @@ export default function Sidebar({
 
       {/* 2. Menú de Navegación Dinámico (Sin Configuración abajo) */}
       <nav style={{ flexGrow: 1, padding: '1.5rem 1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem', overflowY: 'auto' }}>
-        <Link href="/dashboard" style={linkStyle(isActive('/dashboard'))}>
+        <Link href="/dashboard" onClick={handleNav} style={linkStyle(isActive('/dashboard'))}>
           <i className="fas fa-chart-pie" style={{ width: '20px', textAlign: 'center' }}></i> Dashboard
         </Link>
-        <Link href="/nueva-factura" style={linkStyle(isActive('/nueva-factura'))}>
+        <Link href="/nueva-factura" onClick={handleNav} style={linkStyle(isActive('/nueva-factura'))}>
           <i className="fas fa-plus-circle" style={{ width: '20px', textAlign: 'center' }}></i> Nueva Factura
         </Link>
-        <Link href="/historial" style={linkStyle(isActive('/historial'))}>
+        <Link href="/historial" onClick={handleNav} style={linkStyle(isActive('/historial'))}>
           <i className="fas fa-list" style={{ width: '20px', textAlign: 'center' }}></i> Historial
         </Link>
-        <Link href="/clientes" style={linkStyle(isActive('/clientes'))}>
+        <Link href="/clientes" onClick={handleNav} style={linkStyle(isActive('/clientes'))}>
           <i className="fas fa-users" style={{ width: '20px', textAlign: 'center' }}></i> Clientes
         </Link>
-        <Link href="/productos" style={linkStyle(isActive('/productos'))}>
+        <Link href="/productos" onClick={handleNav} style={linkStyle(isActive('/productos'))}>
           <i className="fas fa-box" style={{ width: '20px', textAlign: 'center' }}></i> Productos
         </Link>
-        <Link href="/gastos" style={linkStyle(isActive('/gastos'))}>
+        <Link href="/gastos" onClick={handleNav} style={linkStyle(isActive('/gastos'))}>
           <i className="fas fa-receipt" style={{ width: '20px', textAlign: 'center' }}></i>
           Gastos
         </Link>
-        <Link href="/empresas" style={linkStyle(isActive('/empresas'))}>
+        <Link href="/empresas" onClick={handleNav} style={linkStyle(isActive('/empresas'))}>
           <i className="fas fa-building" style={{ width: '20px', textAlign: 'center' }}></i> Mis Empresas
         </Link>
         {isAdmin && (
-          <Link href="/invitaciones" style={linkStyle(isActive('/invitaciones'))}>
+          <Link href="/invitaciones" onClick={handleNav} style={linkStyle(isActive('/invitaciones'))}>
             <i className="fas fa-envelope-open-text" style={{ width: '20px', textAlign: 'center' }}></i> Invitaciones
           </Link>
         )}

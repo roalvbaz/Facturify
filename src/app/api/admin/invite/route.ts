@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { InviteSchema } from '@/lib/validations/invoice';
 import { createInvitation } from '@/lib/invitations';
+import { getClientIp } from '@/lib/audit';
+import { checkRateLimit } from '@/lib/rateLimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +38,21 @@ export async function POST(request: NextRequest) {
 
   if (!suppliedSecret || suppliedSecret !== configuredSecret) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  }
+
+  // 1b. Rate limit anti abuso: máx. 20 invitaciones por IP en 60 min.
+  const ip = getClientIp(request) || 'unknown';
+  const rl = await checkRateLimit({
+    key: `invite:${ip}`,
+    action: 'ADMIN_INVITE',
+    max: 20,
+    windowSeconds: 60 * 60,
+  });
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: 'Demasiadas solicitudes desde esta IP. Inténtalo más tarde.' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds || 60) } }
+    );
   }
 
   // 2. Validar el cuerpo
