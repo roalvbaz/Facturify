@@ -1,8 +1,6 @@
 import { createClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import { getUserCompanies, getActiveCompanyId } from '@/actions/company.actions';
-import { isAdminUser } from '@/lib/invitations';
-import DashboardShell from '@/components/dashboardShell';
 import EmpresasManager from '@/components/empresasManager';
 
 export const dynamic = 'force-dynamic';
@@ -51,25 +49,8 @@ export default async function EmpresasPage() {
     </div>
   );
 
-  // Usuario con empresas → renderizamos DENTRO del shell del dashboard para
-  // conservar el sidebar y el selector de empresa activa.
-  if (companies.length > 0) {
-    const activeId = activeCompanyId || companies[0].id;
-    const activeCompany = companies.find((c) => c.id === activeId);
-
-    return (
-      <DashboardShell
-        companies={companies}
-        activeCompanyId={activeId}
-        nombreEmpresa={activeCompany?.name || 'Empresa no asignada'}
-        emailUsuario={user.email || 'Usuario'}
-        isAdmin={isAdminUser(user.email)}
-      >
-        {empresaContent}
-      </DashboardShell>
-    );
-  }
-
-  // Onboarding (primera empresa): standalone, sin sidebar.
+  // El sidebar lo renderiza el layout de /empresas (igual que el layout del
+  // dashboard), tanto en onboarding como cuando ya hay empresas. Esta página
+  // solo pinta el contenido, para no duplicar el sidebar.
   return empresaContent;
 }

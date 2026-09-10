@@ -330,15 +330,11 @@ export default function InvoicesTableClient({
                     <InvoiceStatusButton invoiceId={f.id} initialStatus={estado} />
                   </td>
 
-<<<<<<< HEAD
-                  <td style={{ textAlign: 'center' }}>
+<td style={{ textAlign: 'center' }}>
                     <VerifactuBadge vf={verifactuStatus?.[f.id]} />
                   </td>
 
-                  <td style={{ textAlign: 'center' }}>
-=======
                   <td data-label="Acciones" style={{ textAlign: 'center' }}>
->>>>>>> 1db09d07de85b7fa918f95f8f6ec25e7ff18974d
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
                       {isPendiente && (
                         <button

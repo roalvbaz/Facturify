@@ -14,8 +14,8 @@ const inputStyle: React.CSSProperties = {
   padding: '0 14px',
   borderRadius: '8px',
   border: '1px solid var(--border-color, #cbd5e1)',
-  backgroundColor: '#ffffff',
-  color: '#0f172a',
+  backgroundColor: 'var(--card-bg)',
+  color: 'var(--text-color)',
   boxSizing: 'border-box',
   outline: 'none',
   display: 'block',
@@ -98,8 +98,9 @@ export default function NewExpenseModal({
           width: '100%',
           maxWidth: '640px',
           maxHeight: '90vh',
-          backgroundColor: '#ffffff',
+          backgroundColor: 'var(--card-bg)',
           borderRadius: '14px',
+          border: '1px solid var(--border-color)',
           boxShadow: '0 25px 30px -5px rgba(0, 0, 0, 0.25)',
           display: 'flex',
           flexDirection: 'column',
@@ -118,10 +119,10 @@ export default function NewExpenseModal({
           }}
         >
           <div>
-            <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#0f172a', fontWeight: 800 }}>
+            <h3 style={{ margin: 0, fontSize: '1.2rem', color: 'var(--text-color)', fontWeight: 800 }}>
               Registrar Gasto / Compra
             </h3>
-            <p style={{ margin: '3px 0 0 0', fontSize: '0.85rem', color: '#64748b' }}>
+            <p style={{ margin: '3px 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
               Introduce los datos fiscales y desglosa el IVA soportado.
             </p>
           </div>
@@ -133,7 +134,7 @@ export default function NewExpenseModal({
               border: 'none',
               fontSize: '1.8rem',
               cursor: 'pointer',
-              color: '#64748b',
+              color: 'var(--text-muted)',
               lineHeight: '1',
               padding: '0 6px',
             }}
@@ -156,7 +157,7 @@ export default function NewExpenseModal({
           {/* PROVEEDOR Y NIF */}
           <div className="responsive-grid">
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                 Proveedor / Comercio *
               </label>
               <input
@@ -168,7 +169,7 @@ export default function NewExpenseModal({
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                 NIF / CIF Proveedor
               </label>
               <input
@@ -183,7 +184,7 @@ export default function NewExpenseModal({
           {/* REF, FECHA Y CATEGORÍA */}
           <div className="responsive-grid">
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                 Nº Factura / Ref
               </label>
               <input
@@ -194,7 +195,7 @@ export default function NewExpenseModal({
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                 Fecha del Gasto *
               </label>
               <input
@@ -206,7 +207,7 @@ export default function NewExpenseModal({
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                 Categoría
               </label>
               <select name="category" style={inputStyle}>
@@ -223,7 +224,7 @@ export default function NewExpenseModal({
 
           {/* DESCRIPCIÓN */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
               Descripción / Concepto
             </label>
             <input
@@ -239,15 +240,15 @@ export default function NewExpenseModal({
             className="responsive-grid"
             style={{
               alignItems: 'center',
-              backgroundColor: '#f8fafc',
+              backgroundColor: 'var(--bg-color)',
               padding: '1.25rem',
               borderRadius: '10px',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--border-color)',
               gap: '1rem',
             }}
           >
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                 Base Imponible (€) *
               </label>
               <input
@@ -263,7 +264,7 @@ export default function NewExpenseModal({
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                 IVA
               </label>
               <select
@@ -278,7 +279,7 @@ export default function NewExpenseModal({
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                 IRPF
               </label>
               <select
@@ -300,10 +301,15 @@ export default function NewExpenseModal({
               display: 'flex',
               justifyContent: 'flex-end',
               alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '16px 20px',
               fontSize: '0.95rem',
-              gap: '20px',
-              color: '#0f172a',
               fontWeight: 700,
+              color: 'var(--text-color)',
+              backgroundColor: 'var(--bg-color)',
+              border: '1px solid var(--border-color)',
+              borderRadius: '10px',
+              padding: '0.9rem 1.1rem',
             }}
           >
             <span>IVA: +{vatAmount.toFixed(2)} €</span>
@@ -316,7 +322,7 @@ export default function NewExpenseModal({
           {/* MÉTODO DE PAGO Y ESTADO */}
           <div className="responsive-grid">
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                 Método de Pago
               </label>
               <select name="payment_method" style={inputStyle}>
@@ -327,7 +333,7 @@ export default function NewExpenseModal({
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
                 Estado
               </label>
               <select name="status" style={{ ...inputStyle, fontWeight: 600 }}>
@@ -339,7 +345,7 @@ export default function NewExpenseModal({
 
           {/* ADJUNTAR TICKET */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#475569', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
+            <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.4rem', textTransform: 'uppercase' }}>
               Adjuntar Ticket / Factura (PDF o Imagen)
             </label>
             <input
@@ -371,7 +377,7 @@ export default function NewExpenseModal({
               style={{
                 background: 'var(--bg-color, #f8fafc)',
                 border: '1px solid var(--border-color, #cbd5e1)',
-                color: '#334155',
+                color: 'var(--text-color)',
                 padding: '0.65rem 1.4rem',
                 fontSize: '0.9rem',
                 fontWeight: 600,

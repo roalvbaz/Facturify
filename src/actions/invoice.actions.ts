@@ -1,11 +1,7 @@
 'use server';
 
 import { db } from '@/db';
-<<<<<<< HEAD
 import { invoices, invoice_lines, customers, audit_logs, company_settings } from '@/db/schema';
-=======
-import { invoices, invoice_lines, customers } from '@/db/schema';
->>>>>>> 1db09d07de85b7fa918f95f8f6ec25e7ff18974d
 import { eq, and, desc } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';

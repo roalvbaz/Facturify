@@ -9,6 +9,7 @@ import {
   saveCompanyCertificateAction,
   removeCompanyCertificateAction,
   getCompanyCertificateInfoAction,
+  updateAeatEnvironmentAction,
 } from "@/actions/company.actions";
 import { showToast } from "@/lib/utils/toast";
 import TemplateSelector from "@/components/templateSelector";
@@ -33,6 +34,10 @@ export default function ConfigForm({ company }: { company: any }) {
   const [aeatEnv, setAeatEnv] = useState<"sandbox" | "production">(
     (company.aeat_environment as "sandbox" | "production") || "sandbox"
   );
+  const [savingEnv, setSavingEnv] = useState(false);
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     getCompanyCertificateInfoAction()
@@ -120,6 +125,177 @@ export default function ConfigForm({ company }: { company: any }) {
       showToast.error(err?.message || "Error inesperado");
     }
   };
+
+  // Valida el archivo del certificado (extensión + tamaño) antes de subirlo
+  const acceptPfxFile = (file: File) => {
+    if (!/\.(pfx|p12)$/i.test(file.name)) {
+      showToast.error("Solo se admiten archivos .pfx o .p12");
+      return;
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      showToast.error("El certificado no puede superar 3 MB");
+      return;
+    }
+    setPfxFile(file);
+  };
+
+  // Cambia el entorno AEAT. Con certificado ya guardado lo persiste al
+  // instante; sin certificado, el entorno se guarda junto a la subida.
+  const handleEnvironmentChange = async (env: "sandbox" | "production") => {
+    if (env === aeatEnv || savingEnv) return;
+    const prev = aeatEnv;
+    setAeatEnv(env);
+    if (!certInfo) return;
+    setSavingEnv(true);
+    try {
+      const res = await updateAeatEnvironmentAction(env);
+      if (res.success) {
+        showToast.success(`Entorno AEAT: ${env === "production" ? "producción" : "pruebas (sandbox)"}`);
+        router.refresh();
+      } else {
+        setAeatEnv(prev);
+        showToast.error(res.error || "Error al cambiar el entorno");
+      }
+    } catch (err: any) {
+      setAeatEnv(prev);
+      showToast.error(err?.message || "Error inesperado");
+    } finally {
+      setSavingEnv(false);
+    }
+  };
+
+  // Formulario de subida del certificado (reutilizado en el alta y en la sustitución)
+  const uploadForm = (
+    <div style={{
+      padding: "14px",
+      borderRadius: "10px",
+      border: dragOver ? "2px dashed var(--primary)" : "1px dashed var(--border-color)",
+      backgroundColor: dragOver ? "rgba(99,102,241,0.06)" : "var(--bg-color)",
+      display: "flex",
+      flexDirection: "column",
+      gap: "10px",
+      transition: "border-color 0.15s ease, background-color 0.15s ease",
+    }}>
+      <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
+        Sube tu certificado digital en formato <strong>.pfx</strong> o <strong>.p12</strong> (PKCS#12) para enviar facturas a la AEAT vía Veri*factu.
+        Se cifra con <strong>AES-256-GCM</strong> y cada empresa usa el suyo.
+      </p>
+
+      {/* Zona de drag & drop / selector de archivo */}
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDragOver(false);
+          const file = e.dataTransfer.files?.[0];
+          if (file) acceptPfxFile(file);
+        }}
+        onClick={() => document.getElementById("pfx-file-input")?.click()}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "6px",
+          padding: "18px 12px",
+          borderRadius: "10px",
+          cursor: "pointer",
+          border: "1px dashed var(--border-color)",
+          backgroundColor: "var(--card-bg)",
+        }}
+      >
+        <i className={`fas ${pfxFile ? "fa-certificate" : "fa-cloud-upload-alt"}`} style={{ fontSize: "1.5rem", color: dragOver ? "var(--primary)" : "var(--primary)", opacity: 0.85 }}></i>
+        {pfxFile ? (
+          <>
+            <span style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-main)" }}>{pfxFile.name}</span>
+            <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
+              {(pfxFile.size / 1024).toFixed(1)} KB &middot; haz clic para cambiarlo
+            </span>
+          </>
+        ) : (
+          <>
+            <span style={{ fontSize: "0.82rem", fontWeight: 700, color: "var(--text-main)" }}>
+              Arrastra el certificado aquí o haz clic para elegirlo
+            </span>
+            <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
+              Solo .pfx / .p12 &middot; máximo 3 MB
+            </span>
+          </>
+        )}
+        <input
+          id="pfx-file-input"
+          type="file"
+          accept=".pfx,.p12"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) acceptPfxFile(file);
+            e.target.value = "";
+          }}
+        />
+      </div>
+
+      {/* Contraseña */}
+      <div>
+        <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: "4px" }}>
+          Contraseña del PFX
+        </label>
+        <div style={{ position: "relative" }}>
+          <input
+            type={showPassword ? "text" : "password"}
+            value={pfxPassword}
+            onChange={(e) => setPfxPassword(e.target.value)}
+            placeholder="Contraseña del certificado"
+            className="form-control"
+            style={{ height: "38px", fontSize: "0.8rem", width: "100%", paddingRight: "38px" }}
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((v) => !v)}
+            aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+            style={{
+              position: "absolute",
+              right: "6px",
+              top: "50%",
+              transform: "translateY(-50%)",
+              background: "none",
+              border: "none",
+              cursor: "pointer",
+              color: "var(--text-muted)",
+              fontSize: "0.9rem",
+              padding: "6px",
+            }}
+          >
+            <i className={`fas ${showPassword ? "fa-eye-slash" : "fa-eye"}`}></i>
+          </button>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={handleUploadCertificate}
+        disabled={uploadingCert || !pfxFile || !pfxPassword}
+        className="btn btn-primary"
+        style={{
+          alignSelf: "flex-start",
+          fontSize: "0.78rem",
+          fontWeight: 600,
+          padding: "0.4rem 1rem",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "6px",
+          opacity: uploadingCert || !pfxFile || !pfxPassword ? 0.6 : 1,
+          cursor: uploadingCert || !pfxFile || !pfxPassword ? "not-allowed" : "pointer",
+        }}
+      >
+        {uploadingCert
+          ? <><i className="fas fa-spinner fa-spin"></i> Validando y guardando…</>
+          : <><i className="fas fa-upload"></i> Guardar certificado</>
+        }
+      </button>
+    </div>
+  );
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -282,12 +458,55 @@ export default function ConfigForm({ company }: { company: any }) {
           <i className="fas fa-certificate" style={{ color: "var(--text-muted)" }}></i> Certificado Digital AEAT (Veri*factu)
         </h4>
 
+        {/* ── Entorno AEAT (siempre visible, persiste al instante con cert) ── */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "12px" }}>
+          <button
+            type="button"
+            onClick={() => handleEnvironmentChange("sandbox")}
+            disabled={savingEnv}
+            style={{
+              display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "3px", textAlign: "left",
+              padding: "10px 12px", borderRadius: "10px", cursor: savingEnv ? "wait" : "pointer",
+              border: aeatEnv === "sandbox" ? "2px solid #f59e0b" : "1px solid var(--border-color)",
+              backgroundColor: aeatEnv === "sandbox" ? "rgba(245,158,11,0.08)" : "var(--bg-color)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <span style={{ fontSize: "0.8rem", fontWeight: 800, color: "var(--text-main)", display: "flex", alignItems: "center", gap: "6px" }}>
+              <i className="fas fa-flask" style={{ color: "#f59e0b" }}></i> Sandbox (pruebas)
+            </span>
+            <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", lineHeight: 1.35 }}>
+              Entorno de pruebas AEAT. No genera envíos reales.
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleEnvironmentChange("production")}
+            disabled={savingEnv}
+            style={{
+              display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "3px", textAlign: "left",
+              padding: "10px 12px", borderRadius: "10px", cursor: savingEnv ? "wait" : "pointer",
+              border: aeatEnv === "production" ? "2px solid #ef4444" : "1px solid var(--border-color)",
+              backgroundColor: aeatEnv === "production" ? "rgba(239,68,68,0.08)" : "var(--bg-color)",
+              transition: "all 0.15s ease",
+            }}
+          >
+            <span style={{ fontSize: "0.8rem", fontWeight: 800, color: "var(--text-main)", display: "flex", alignItems: "center", gap: "6px" }}>
+              <i className="fas fa-server" style={{ color: "#ef4444" }}></i> Producción
+            </span>
+            <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", lineHeight: 1.35 }}>
+              Envíos reales a la AEAT. Requiere certificado real.
+            </span>
+          </button>
+        </div>
+
         {certLoading ? (
           <div style={{ padding: "12px", fontSize: "0.8rem", color: "var(--text-muted)" }}>
             <i className="fas fa-spinner fa-spin" style={{ marginRight: "6px" }}></i> Cargando información del certificado…
           </div>
         ) : certInfo ? (
           /* ── Certificado existente ── */
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           <div style={{
             padding: "14px",
             borderRadius: "10px",
@@ -306,124 +525,56 @@ export default function ConfigForm({ company }: { company: any }) {
                 fontWeight: 600,
                 padding: "2px 8px",
                 borderRadius: "999px",
-                backgroundColor: certInfo.environment === "production" ? "#dc2626" : "#f59e0b",
+                backgroundColor: aeatEnv === "production" ? "#dc2626" : "#f59e0b",
                 color: "#fff",
               }}>
-                {certInfo.environment === "production" ? "PRODUCCIÓN" : "SANDBOX"}
+                {aeatEnv === "production" ? "PRODUCCIÓN" : "SANDBOX"}
               </span>
             </div>
             <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", lineHeight: 1.6 }}>
               <div><strong>Subject:</strong> {certInfo.subject}</div>
               <div><strong>Válido desde:</strong> {certInfo.validFrom} <strong>hasta:</strong> {certInfo.validTo}</div>
             </div>
-            <button
-              type="button"
-              onClick={handleRemoveCertificate}
-              style={{
-                marginTop: "10px",
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                color: "#ef4444",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                padding: 0,
-              }}
-            >
-              <i className="fas fa-trash" style={{ marginRight: "4px" }}></i> Eliminar certificado
-            </button>
+            <div style={{ display: "flex", gap: "18px", marginTop: "10px" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowUploadForm((v) => !v)}
+                  style={{
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    color: "var(--primary)",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                  }}
+                >
+                  <i className="fas fa-exchange-alt" style={{ marginRight: "4px" }}></i>
+                  {showUploadForm ? "Cancelar sustitución" : "Subir nuevo certificado"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleRemoveCertificate}
+                  style={{
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    color: "#ef4444",
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    padding: 0,
+                  }}
+                >
+                  <i className="fas fa-trash" style={{ marginRight: "4px" }}></i> Eliminar certificado
+                </button>
+              </div>
+            </div>
+
+            {showUploadForm && uploadForm}
           </div>
         ) : (
           /* ── Formulario de subida ── */
-          <div style={{
-            padding: "14px",
-            borderRadius: "10px",
-            border: "1px dashed var(--border-color)",
-            backgroundColor: "var(--bg-color)",
-            display: "flex",
-            flexDirection: "column",
-            gap: "10px",
-          }}>
-            <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>
-              Sube tu certificado digital en formato <strong>.pfx</strong> o <strong>.p12</strong> (PKCS#12) para que tu empresa pueda enviar facturas a la AEAT vía Veri*factu.
-              Cada empresa usa su propio certificado.
-            </p>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-              {/* Entorno AEAT */}
-              <div>
-                <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: "4px" }}>
-                  Entorno AEAT
-                </label>
-                <select
-                  value={aeatEnv}
-                  onChange={(e) => setAeatEnv(e.target.value as "sandbox" | "production")}
-                  className="form-control"
-                  style={{ height: "36px", fontSize: "0.8rem" }}
-                >
-                  <option value="sandbox">Sandbox (pruebas)</option>
-                  <option value="production">Producción</option>
-                </select>
-              </div>
-
-              {/* Archivo PFX */}
-              <div>
-                <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: "4px" }}>
-                  Certificado PFX/P12
-                </label>
-                <input
-                  type="file"
-                  accept=".pfx,.p12"
-                  onChange={(e) => setPfxFile(e.target.files?.[0] || null)}
-                  style={{
-                    height: "36px",
-                    fontSize: "0.78rem",
-                    display: "flex",
-                    alignItems: "center",
-                  }}
-                  className="form-control"
-                />
-              </div>
-            </div>
-
-            {/* Contraseña */}
-            <div>
-              <label style={{ display: "block", fontSize: "0.7rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", marginBottom: "4px" }}>
-                Contraseña del PFX
-              </label>
-              <input
-                type="password"
-                value={pfxPassword}
-                onChange={(e) => setPfxPassword(e.target.value)}
-                placeholder="Contraseña del certificado"
-                className="form-control"
-                style={{ height: "36px", fontSize: "0.8rem" }}
-              />
-            </div>
-
-            <button
-              type="button"
-              onClick={handleUploadCertificate}
-              disabled={uploadingCert || !pfxFile || !pfxPassword}
-              className="btn btn-primary"
-              style={{
-                alignSelf: "flex-start",
-                fontSize: "0.78rem",
-                fontWeight: 600,
-                padding: "0.4rem 1rem",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                opacity: uploadingCert || !pfxFile || !pfxPassword ? 0.6 : 1,
-                cursor: uploadingCert || !pfxFile || !pfxPassword ? "not-allowed" : "pointer",
-              }}
-            >
-              {uploadingCert
-                ? <><i className="fas fa-spinner fa-spin"></i> Validando y guardando…</>
-                : <><i className="fas fa-upload"></i> Subir certificado</>
-              }
-            </button>
-          </div>
+          uploadForm
         )}
       </div>
 

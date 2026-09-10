@@ -59,19 +59,19 @@ export default function ExpensesClientView({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1.25rem' }}>
         <div className="card" style={{ padding: '1rem' }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Gastos</div>
-          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#0f172a', marginTop: '4px' }}>{stats.totalGasto.toFixed(2)} €</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-color)', marginTop: '4px' }}>{stats.totalGasto.toFixed(2)} €</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{stats.count} registros</div>
         </div>
 
         <div className="card" style={{ padding: '1rem' }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Base Imponible Total</div>
-          <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#334155', marginTop: '4px' }}>{stats.totalBase.toFixed(2)} €</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-color)', marginTop: '4px' }}>{stats.totalBase.toFixed(2)} €</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Gasto neto deducible</div>
         </div>
 
         <div className="card" style={{ padding: '1rem', borderLeft: '4px solid #10b981' }}>
-          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#059669', textTransform: 'uppercase' }}>IVA Soportado (Deducible)</div>
-          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#059669', marginTop: '4px' }}>{stats.totalIva.toFixed(2)} €</div>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#10b981', textTransform: 'uppercase' }}>IVA Soportado (Deducible)</div>
+          <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#10b981', marginTop: '4px' }}>{stats.totalIva.toFixed(2)} €</div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>A deducir en Mod. 303</div>
         </div>
       </div>
@@ -157,8 +157,8 @@ export default function ExpensesClientView({
                       {g.description && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{g.description}</div>}
                     </td>
                     <td data-label="Base">{(g.subtotal_cents / 100).toFixed(2)} €</td>
-                    <td data-label="IVA Soportado" style={{ color: '#059669', fontWeight: 600 }}>+{(g.vat_amount_cents / 100).toFixed(2)} € ({g.vat_percent}%)</td>
-                    <td data-label="Total" style={{ textAlign: 'right', fontWeight: 800, color: '#0f172a', fontSize: '0.95rem' }}>
+                    <td data-label="IVA Soportado" style={{ color: '#10b981', fontWeight: 600 }}>+{(g.vat_amount_cents / 100).toFixed(2)} € ({g.vat_percent}%)</td>
+                    <td data-label="Total" style={{ textAlign: 'right', fontWeight: 800, color: 'var(--text-color)', fontSize: '0.95rem' }}>
                       {(g.total_cents / 100).toFixed(2)} €
                     </td>
                     <td data-label="Ticket" style={{ textAlign: 'center' }}>

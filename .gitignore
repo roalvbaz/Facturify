@@ -16,3 +16,6 @@ build
 .claude
 .github
 drizzle
+
+# Manual local de operaciones (no se sube a GitHub)
+README-OPERACIONES.md

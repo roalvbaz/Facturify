@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { companies, company_members, company_settings } from "@/db/schema";
+import { companies, company_members, company_settings, audit_logs } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
 import { logAuditEvent } from "@/lib/audit";
 import { eq, and } from "drizzle-orm";
@@ -440,6 +440,40 @@ export async function removeCompanyCertificateAction() {
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message || "Error al eliminar el certificado" };
+  }
+}
+
+/** Cambia el entorno AEAT (sandbox/producción) sin tocar el certificado almacenado */
+export async function updateAeatEnvironmentAction(environment: string) {
+  try {
+    const companyId = await getActiveCompanyId();
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("No autenticado");
+
+    const env = (environment || "").trim();
+    if (env !== "sandbox" && env !== "production") {
+      throw new Error("El entorno AEAT debe ser 'sandbox' o 'production'.");
+    }
+
+    await db
+      .update(company_settings)
+      .set({ aeat_environment: env, updated_at: new Date() })
+      .where(eq(company_settings.company_id, companyId));
+
+    await db.insert(audit_logs).values({
+      company_id: companyId,
+      user_id: user.id,
+      event_code: 'AEAT_ENV_CHANGED',
+      description: `Entorno AEAT cambiado a ${env}.`,
+    });
+
+    revalidatePath("/(dashboard)", "layout");
+    revalidatePath("/configuracion");
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Error al cambiar el entorno AEAT" };
   }
 }
 
