@@ -14,6 +14,16 @@ export default function LoginPage() {
   const recaptchaRef = useRef<ReCAPTCHA>(null);
   const router = useRouter();
 
+  // Forzar modo claro en login — el tema se restaura al navegar fuera.
+  useEffect(() => {
+    const html = document.documentElement;
+    html.setAttribute('data-theme', 'light');
+    html.classList.remove('dark');
+    return () => {
+      html.removeAttribute('data-theme');
+    };
+  }, []);
+
   // Capturar errores que vengan por la URL (ej: enlace de correo caducado).
   // Supabase a veces devuelve el error en el fragmento (#error=...) y otras
   // en la query string (?error=...), así que leemos ambos.
