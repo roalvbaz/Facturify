@@ -69,7 +69,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="login-page" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: '#f1f5f9', padding: '2rem' }}>
+    <div className="login-page" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', backgroundColor: 'var(--bg-color)', padding: '2rem' }}>
       <div className="card login-card" style={{ maxWidth: '400px', width: '100%', padding: '2.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
           <Image
@@ -83,19 +83,19 @@ export default function LoginPage() {
         </div>
 
         <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.5rem 0' }}>Acceso a Clientes</h1>
-          <p style={{ color: '#64748b', fontSize: '0.875rem', margin: 0 }}>Inicia sesión para gestionar tus facturas</p>
+          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-color)', margin: '0 0 0.5rem 0' }}>Acceso a Clientes</h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', margin: 0 }}>Inicia sesión para gestionar tus facturas</p>
         </div>
 
         {error && (
-          <div style={{ backgroundColor: '#fee2e2', color: '#b91c1c', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.875rem', marginBottom: '1.5rem', textAlign: 'center', fontWeight: 600 }}>
+          <div style={{ backgroundColor: 'var(--danger-bg, #fee2e2)', color: 'var(--danger-text, #b91c1c)', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.875rem', marginBottom: '1.5rem', textAlign: 'center', fontWeight: 600 }}>
             {error}
           </div>
         )}
 
         <form onSubmit={handleLogin}>
           <div className="form-group" style={{ marginBottom: '1.25rem' }}>
-            <label htmlFor="email" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', marginBottom: '0.5rem' }}>Correo Electrónico</label>
+            <label htmlFor="email" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Correo Electrónico</label>
             <input
               type="email"
               id="email"
@@ -109,8 +109,7 @@ export default function LoginPage() {
 
           <div className="form-group" style={{ marginBottom: '1.25rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <label htmlFor="password" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#334155', margin: 0 }}>Contraseña</label>
-              {/* ENLACE NUEVO */}
+              <label htmlFor="password" style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-muted)', margin: 0 }}>Contraseña</label>
               <Link href="/recuperar-password" style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600, textDecoration: 'none' }}>
                 ¿Olvidaste tu contraseña?
               </Link>
@@ -143,8 +142,8 @@ export default function LoginPage() {
           </button>
         </form>
 
-        <div style={{ textAlign: 'center', marginTop: '2rem', fontSize: '0.875rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.5rem' }}>
-          <p style={{ color: '#64748b', margin: 0 }}>¿Aún no tienes cuenta? Escríbenos a <a href="mailto:soporte.facturon@gmail.com" style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 800 }}>soporte.facturon@gmail.com</a> y te enviaremos un enlace para crear tu perfil.</p>
+        <div style={{ textAlign: 'center', marginTop: '2rem', fontSize: '0.875rem', borderTop: '1px solid var(--border-color)', paddingTop: '1.5rem' }}>
+          <p style={{ color: 'var(--text-muted)', margin: 0 }}>¿Aún no tienes cuenta? Escríbenos a <a href="mailto:soporte.facturon@gmail.com" style={{ color: 'var(--primary)', textDecoration: 'none', fontWeight: 800 }}>soporte.facturon@gmail.com</a> y te enviaremos un enlace para crear tu perfil.</p>
         </div>
       </div>
     </div>

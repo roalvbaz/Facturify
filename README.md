@@ -1,92 +1,122 @@
-# Facturify — Veri*factu (cumplimiento AEAT)
+# ⚡ FacturON
 
-Módulo de cumplimiento **Veri*factu** (RD 1007/2023 y Orden HAC/1177/2024) para
-remitir cada factura emitida a la Agencia Tributaria. Cada **empresa sube su
-propio certificado digital** desde Configuración; el PFX se guarda cifrado
-(AES-256-GCM) en `company_settings` y se usa como certificado de cliente TLS en
-la llamada SOAP.
+**Facturación electrónica B2B para autónomos y pymes, lista para Veri\*factu.**
 
-## Arquitectura (flujo)
+FacturON es tu aplicación de facturación hecha para el mercado español: crea facturas en segundos, con numeración automática, encadenado de hash, código QR y envío directo a la **AEAT** — todo con tu propio certificado digital y sin salir de la misma pantalla.
 
-```
-Emitir factura
-  └─ buildAltaXML/AnulacionXML (xml/builder.ts)
-       └─ encolar en verifactu_submissions (queue/manager.ts)
-            └─ cron /api/cron/verifactu cada 60s (queue/processor.ts)
-                 ├─ descifrar PFX de la empresa
-                 ├─ submitToVerifactu → SOAP a la AEAT (soap/client.ts)
-                 └─ CONFORME (+CSV) · reintento backoff 1m→5m→15m→1h→4h · ERROR
-```
+---
 
-Estado visible por factura en **Historial** (columna "Veri*factu").
+## ✨ Qué hace por ti
 
-## Probar en local (no toca la AEAT)
+### 🧾 Facturas que cumplen
+- Editor de facturas con **numeración automática por serie y año** (`F-2026-0001`, …) e importes calculados al céntimo.
+- **Encadenado SHA-256** entre facturas + **código QR reglamentario** en cada PDF.
+- **Facturas rectificativas / abonos** vinculadas (serie `R`), con motivo AEAT (R1, R2, R3, R4) según RD 1619/2012.
+- PDF descargable y **envío por email con el PDF adjunto** al cliente.
+- Vista previa de la factura y **sustitución de plantilla** al instante.
 
-Unit tests del generador XML, cifrado, parseo de certificados y cola:
+### 🇪🇸 Veri\*factu (AEAT) integrado
+- **Cada empresa sube su propio certificado PFX/P12** desde Configuración — firma con el suyo, no con un certificado de la plataforma.
+- Certificado cifrado en repositorio (**AES-256-GCM**) y validado (parseo + vigencia) antes de guardarse.
+- Envío SOAP del `SuministroLRFacturasEmitidas` con estado en vivo: `PENDIENTE → CONFORME / NO_CONFORME / ERROR`, con **reintentos con backoff exponencial**.
+- Entorno **sandbox (pruebas) y producción** seleccionable por empresa, sin perder el certificado.
+- **Código Seguro de Verificación (CSV)**: comprueba que la AEAT aceptó tu factura.
 
-```bash
-npx vitest run
-```
+### 📊 Gestión del negocio
+- **Dashboard** con métricas e **evolución de ingresos** (gráficas).
+- **Clientes y productos/servicios** en catálogo, reutilizables en cada factura.
+- **Gastos y compras** con desglose de **IVA soportado (deducible)** e **IRPF**, para tu modelo 303.
+- **Historial** completo con filtros, exportación **CSV** y recordatorios de pago.
+- **Multiempresa**: factura con varias sociedades desde una sola cuenta.
 
-Generar un PFX **self-signed** para probar parseo/cifrado sin certificado real:
+### 🛡 Diseñada para el día a día
+- **Modo claro/oscuro** y tema de color personalizable por empresa.
+- **Roles de equipo** (OWNER / ADMIN / MEMBER) e **invitaciones por email** para incorporar usuarios.
+- **Auditoría completa** e inmutable (inicio de sesión, cambios, envíos…) y protección anti-bots (reCAPTCHA) y contra fuerza bruta (rate limiting).
+- Diseño **responsive**: funciona en escritorio, tablet y móvil.
 
-```bash
-npx tsx scripts/make-test-cert.ts facturify-test-cert.pfx mi-contraseña
-```
+---
 
-## Probar contra el sandbox de la AEAT
+## 🖼 La aplicación
 
-### 1. Obtener el certificado de pruebas
+| Dashboard | Nueva factura | Historial + Veri\*factu |
+|:---:|:---:|:---:|
+| Métricas e ingresos | Editor con plantilla y QR | Badge de estado AEAT + CSV |
+| *(añade tu captura)* | *(añade tu captura)* | *(añade tu captura)* |
 
-El sandbox exige un **certificado de pruebas emitido por la propia AEAT**
-(no vale el self-signed). Se solicita en la sede electrónica de la Agencia
-Tributaria → apartado **Veri*factu / Pruebas (ensayo)**. Descarga el PFX con su
-contraseña.
+| Configuración AEAT | Gastos | Invitaciones |
+|:---:|:---:|:---:|
+| Sube tu PFX + entorno | IVA soportado e IRPF | Alta de usuarios por email |
+| *(añade tu captura)* | *(añade tu captura)* | *(añade tu captura)* |
 
-### 2. Configurar `.env`
+---
 
-```env
-SANDBOX_PFX_PATH=C:/ruta/al/certificado-de-pruebas.pfx
-SANDBOX_PFX_PASSWORD=contraseña-del-pfx
-SANDBOX_NIF_EMISOR=BXXXXXXXX        # NIF que consta en el certificado
-# (alternativa a SANDBOX_PFX_PATH: SANDBOX_PFX_BASE64=<base64 del pfx>)
-```
+## 🧰 Stack
 
-### 3. Enviar la factura de prueba
-
-```bash
-npx tsx scripts/test-sandbox.ts
-# opciones: --nif=BXXXXXXXX --importe=121.00 --desc="Factura de prueba"
-```
-
-El script construye un XML de alta, lo envía al endpoint de preproducción y
-vuelca el resultado: **CSV**, estado (Conforme / No conforme) y errores. Si la
-respuesta SOAP no pudo parsearse, se guarda completa en `sandbox-response.xml`.
-Exit code 0 = aceptado.
-
-## Pasos para producción
-
-| Paso | Cómo |
+| Área | Tecnología |
 |---|---|
-| 1. Cron en Render | Cron job → `GET https://TU-APP/api/cron/verifactu` cada 60s, header `Authorization: Bearer $VERIFACTU_CRON_SECRET` |
-| 2. Variables en Render | `CERT_ENCRYPTION_KEY` (`openssl rand -hex 32`), `VERIFACTU_CRON_SECRET`, `AEAT_ENVIRONMENT=sandbox` al inicio |
-| 3. Cada empresa sube su PFX | Configuración → "Certificado Digital AEAT" (cifrado en BD, por empresa) |
-| 4. Verificación end-to-end | Emitir factura → aparece en `verifactu_submissions` → el cron la envía → badge CONFORME + CSV guardado |
+| Framework | [Next.js 16](https://nextjs.org) (App Router) + Turbopack |
+| UI | React 19 · CSS variables (modo claro/oscuro) · font-awesome |
+| Base de datos | PostgreSQL (Supabase) · **Drizzle ORM** |
+| Autenticación | Supabase Auth (SSR) · reCAPTCHA v2 |
+| Almacenamiento | Supabase Storage (logos, tickets) |
+| Envío AEAT | SOAP + certificados PFX (node-forge) · cifrado AES-256-GCM |
+| PDF | Visor y descarga de la factura desde el navegador |
+| Email | Nodemailer (Gmail) |
+| Estado AEAT | Cola con reintentos (backoff exponencial) + cron |
 
-> Antes de pasar a producción con `AEAT_ENVIRONMENT=production`, valida la
-> operativa completa en sandbox y revisa que el certificado de cada empresa sea
-> el de su titular (nunca un certificado compartido por la plataforma).
+---
 
-## Estructura del módulo
+## 🚀 Puesta en marcha
 
-- `src/lib/verifactu/xml/` — generador XML (types, constants, builder)
-- `src/lib/verifactu/soap/` — endpoints + cliente SOAP con certificado cliente
-- `src/lib/verifactu/canonical.ts` `/ crypto.ts` `/ qr.ts` — hash encadenado y QR
-- `src/lib/verifactu/certificate.ts` — parseo PFX→PEM + agente TLS
-- `src/lib/verifactu/cipher.ts` — cifrado AES-256-GCM del PFX en BD
-- `src/lib/verifactu/queue/` — cola con reintentos exponenciales
-- `src/app/api/cron/verifactu/` — cron job procesador
-- `src/app/api/verifactu/status/[invoiceId]/` — estado por factura
-- `src/actions/company.actions.ts` — subir/quitar/consultar certificado por empresa
-- `scripts/` — make-test-cert.ts y test-sandbox.ts
-- `supabase/MASTER_SCHEMA.sql` — esquema completo (13 tablas)
+```bash
+# 1. Instalar dependencias
+npm ci
+
+# 2. Configurar variables de entorno
+cp .env.example .env
+#    ← Rellena Supabase, reCAPTCHA, Gmail y tus claves AEAT.
+
+# 3. Arrancar en desarrollo
+npm run dev        # http://localhost:3000
+
+# 4. Construir y publicar
+npm run build
+npm run start
+```
+
+> Aplicar la base de datos: ejecuta los SQL de `supabase/` y `drizzle/` en el SQL editor de Supabase (hay un `MASTER_SCHEMA.sql` que crea todo el esquema).
+
+---
+
+## 🗂 Estructura rápida
+
+```
+src/app            → páginas y API (proxy de protección de sesión en src/proxy.ts)
+src/actions        → server actions (empresas, facturas, gastos, clientes, productos…)
+src/components     → UI de cliente (sidebar, modales, tablas, PDF de factura…)
+src/db/schema.ts   → esquema de base de datos (origen de verdad para Drizzle)
+src/lib            → lógica: verifactu (certificado, cifrado, SOAP, cola), pdf, email, auditoría
+supabase/          → migraciones SQL aplicadas manualmente
+```
+
+---
+
+## 🔐 Roles y acceso
+
+- **OWNER** — crea y administra la empresa; ve Invitaciones y panel de administración.
+- **ADMIN** — gestiona equipo e invitaciones.
+- **MEMBER** — factura y accede a la operativa de la empresa.
+- **Admin de plataforma** (`ADMIN_EMAILS`) — gestiona las invitaciones de alta.
+
+---
+
+## 📜 Cumplimiento
+
+- **Veri\*factu** — RD 1007/2023 (libro registro de facturas del IVA).
+- **Facturas rectificativas / abonos** — RD 1619/2012.
+- Cada factura se registra de forma **inmutable** con hash encadenado, QR y CSV ante la AEAT.
+
+---
+
+*Hecho con ❤️ para el mercado español. ¿Problemas o ideas? Abre un issue.*
