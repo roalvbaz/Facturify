@@ -32,6 +32,7 @@ export default function InvoiceModalClient({
   const router = useRouter();
   const [internalIsOpen, setInternalIsOpen] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [showRectifyConfirm, setShowRectifyConfirm] = useState(false);
   const [rectifyReason, setRectifyReason] = useState('R1 - Error en factura previa / rectificación de importes');
   const [mounted, setMounted] = useState(false);
@@ -60,10 +61,19 @@ export default function InvoiceModalClient({
     return () => { document.body.style.overflow = 'unset'; };
   }, [showModal]);
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     const element = document.getElementById(`printable-invoice-${factura.id || 'preview'}`);
-    if (element) {
-      descargarFacturaPDF(element, factura.formatted_number || 'Factura-Borrador');
+    if (!element) {
+      showToast.error('No se encontró la factura para generar el PDF.');
+      return;
+    }
+    setDownloading(true);
+    try {
+      await descargarFacturaPDF(element, factura.formatted_number || 'Factura-Borrador');
+    } catch (err: any) {
+      showToast.error(err?.message || 'Error al generar el PDF. Inténtalo de nuevo.');
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -282,24 +292,26 @@ export default function InvoiceModalClient({
                 <span>{sendingEmail ? 'Enviando...' : 'Enviar Email'}</span>
               </button>
 
-              <button 
+              <button
                 type="button"
-                onClick={handleDownload} 
-                style={{ 
-                  background: '#0f172a', 
-                  color: 'white', 
-                  border: 'none', 
-                  padding: '8px 14px', 
-                  borderRadius: '6px', 
-                  cursor: 'pointer', 
-                  display: 'flex', 
-                  gap: '6px', 
-                  alignItems: 'center', 
+                onClick={handleDownload}
+                disabled={downloading}
+                style={{
+                  background: '#0f172a',
+                  color: 'white',
+                  border: 'none',
+                  padding: '8px 14px',
+                  borderRadius: '6px',
+                  cursor: downloading ? 'not-allowed' : 'pointer',
+                  opacity: downloading ? 0.7 : 1,
+                  display: 'flex',
+                  gap: '6px',
+                  alignItems: 'center',
                   fontWeight: 600,
                   fontSize: '0.85rem'
                 }}
               >
-                <i className="fas fa-download"></i> Descargar PDF
+                {downloading ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-download"></i>} {downloading ? 'Generando...' : 'Descargar PDF'}
               </button>
             </>
           )}

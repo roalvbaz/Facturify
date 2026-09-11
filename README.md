@@ -1,8 +1,22 @@
-# ⚡ FacturON
+<p align="center">
+  <img src="public/img/banner.png" alt="FacturON — Facturación electrónica para España" width="480" />
+</p>
 
-**Facturación electrónica B2B para autónomos y pymes, lista para Veri\*factu.**
+<h1 align="center">⚡ FacturON</h1>
 
-FacturON es tu aplicación de facturación hecha para el mercado español: crea facturas en segundos, con numeración automática, encadenado de hash, código QR y envío directo a la **AEAT** — todo con tu propio certificado digital y sin salir de la misma pantalla.
+<p align="center">
+  <strong>Facturación electrónica B2B para autónomos y pymes, lista para Veri\*factu.</strong>
+  <br/>
+  Crea facturas en segundos, con numeración automática, hash encadenado, código QR
+  y envío directo a la <strong>AEAT</strong> — todo con tu propio certificado digital.
+</p>
+
+<p align="center">
+  <a href="#features">Características</a> ·
+  <a href="#stack">Stack</a> ·
+  <a href="#quickstart">Puesta en marcha</a> ·
+  <a href="#cumplimiento">Cumplimiento</a>
+</p>
 
 ---
 
@@ -13,7 +27,7 @@ FacturON es tu aplicación de facturación hecha para el mercado español: crea 
 - **Encadenado SHA-256** entre facturas + **código QR reglamentario** en cada PDF.
 - **Facturas rectificativas / abonos** vinculadas (serie `R`), con motivo AEAT (R1, R2, R3, R4) según RD 1619/2012.
 - PDF descargable y **envío por email con el PDF adjunto** al cliente.
-- Vista previa de la factura y **sustitución de plantilla** al instante.
+- **Plantillas** profesionales: 50+ diseños en 6 categorías (moderno, clásico, minimalista, elegante, corporativo, creativo).
 
 ### 🇪🇸 Veri\*factu (AEAT) integrado
 - **Cada empresa sube su propio certificado PFX/P12** desde Configuración — firma con el suyo, no con un certificado de la plataforma.
@@ -61,7 +75,7 @@ FacturON es tu aplicación de facturación hecha para el mercado español: crea 
 | Autenticación | Supabase Auth (SSR) · reCAPTCHA v2 |
 | Almacenamiento | Supabase Storage (logos, tickets) |
 | Envío AEAT | SOAP + certificados PFX (node-forge) · cifrado AES-256-GCM |
-| PDF | Visor y descarga de la factura desde el navegador |
+| PDF | Descarga desde el navegador (html2pdf) · envío por email |
 | Email | Nodemailer (Gmail) |
 | Estado AEAT | Cola con reintentos (backoff exponencial) + cron |
 
