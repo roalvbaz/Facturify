@@ -2,57 +2,62 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { emitInvoiceAction, getActiveCompanyAction, getCompanyCustomersAction } from '@/actions/invoice.actions';
+import {
+  createEstimateAction,
+  updateEstimateAction,
+  sendEstimateAction,
+  getEstimateDetailAction,
+} from '@/actions/estimate.actions';
+import { getActiveCompanyAction, getCompanyCustomersAction } from '@/actions/invoice.actions';
 import { getActiveCompanySettings } from '@/actions/company.actions';
 import { createProductAction } from '@/actions/product.actions';
 import { showToast } from '@/lib/utils/toast';
-import { generarFacturaBase64PDF } from '@/lib/pdf/pdf';
-import InvoiceModalClient from '@/components/invoiceModalClient';
+import InvoicePDFTemplate from '@/components/invoicePDFTemplate';
 import { ProductCatalogSelector } from '@/components/productCatalogSelector';
 import { CustomerSelector } from '@/components/customerSelector';
-import { PackagePlus, Users, RotateCcw, Eye, CheckCircle } from 'lucide-react';
+import { PackagePlus, Eye, Send, Save, Users } from 'lucide-react';
 
-export default function NuevaFacturaPage() {
+const DEFAULT_LINE = { description: '', quantity: 1, unit_price: 0, vat_rate: 21, saved: false };
+
+export default function EstimateForm({ mode, estimateId }: { mode: 'new' | 'edit'; estimateId?: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [isConfirmReviewOpen, setIsConfirmReviewOpen] = useState(false);
-  const [isCatalogOpen, setIsCatalogOpen] = useState(false);
-  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [loaded, setLoaded] = useState(false);
 
   const [empresa, setEmpresa] = useState<{ id?: string; name: string; nif: string; address: string }>({
     name: 'Cargando empresa...', nif: '', address: '',
   });
-
   const [templateId, setTemplateId] = useState<string>('clasico-tradicional');
-
   const [customerList, setCustomerList] = useState<Array<any>>([]);
 
   const [suggestions, setSuggestions] = useState<Array<any>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const customerInputRef = useRef<HTMLDivElement>(null);
 
-  const [seriesCode, setSeriesCode] = useState('F');
-  const [rectifiesInvoiceId, setRectifiesInvoiceId] = useState<string | null>(null);
-  const [rectificationReason, setRectificationReason] = useState('');
-  const [rectifiesNumber, setRectifiesNumber] = useState('');
-
-  const [issuedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [dueDate, setDueDate] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('TRANSFERENCIA');
-  
   const [clientName, setClientName] = useState('');
   const [clientTaxId, setClientTaxId] = useState('');
   const [clientEmail, setClientEmail] = useState('');
   const [clientAddress, setClientAddress] = useState('');
 
+  const [expiryDate, setExpiryDate] = useState('');
+  const [notes, setNotes] = useState('');
   const [globalVat, setGlobalVat] = useState(21);
-  const [irpfRate, setIrpfRate] = useState(0);
+  const [lines, setLines] = useState([{ ...DEFAULT_LINE }]);
 
-  const [lines, setLines] = useState([
-    { description: '', quantity: 1, unit_price: 0, vat_rate: 21, saved: false }
-  ]);
+  // Modo edición
+  const [currentStatus, setCurrentStatus] = useState<string | null>(null);
+  const [clientNote, setClientNote] = useState<string | null>(null);
+
+  const [isCatalogOpen, setIsCatalogOpen] = useState(false);
+  const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
+  // Fecha de validez por defecto: hoy + 30 días.
+  const defaultExpiry = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 30);
+    return d.toISOString().split('T')[0];
+  };
 
   useEffect(() => {
     async function loadData() {
@@ -62,7 +67,6 @@ export default function NuevaFacturaPage() {
           getCompanyCustomersAction(),
           getActiveCompanySettings(),
         ]);
-
         if (compRes?.company) {
           setEmpresa({
             id: compRes.company.id,
@@ -73,37 +77,47 @@ export default function NuevaFacturaPage() {
         }
         if (custRes?.customers) setCustomerList(custRes.customers);
         if (settingsRes?.template_id) setTemplateId(settingsRes.template_id);
+
+        setExpiryDate(defaultExpiry());
+
+        // Modo edición: cargar el presupuesto existente.
+        if (mode === 'edit' && estimateId) {
+          const res: any = await getEstimateDetailAction(estimateId);
+          if (res.success) {
+            const e = res.estimate;
+            setCurrentStatus(e.status);
+            setClientNote(e.client_note || null);
+            setNotes(e.notes || '');
+            if (e.expiry_date) setExpiryDate(new Date(e.expiry_date).toISOString().split('T')[0]);
+            if (e.customer) {
+              setClientName(e.customer.name || '');
+              setClientTaxId(e.customer.tax_id || '');
+              setClientEmail(e.customer.email || '');
+              setClientAddress(e.customer.address || '');
+            }
+            if (e.lines && e.lines.length > 0) {
+              setLines(
+                e.lines.map((l: any) => ({
+                  description: l.description || '',
+                  quantity: l.quantity ?? 1,
+                  unit_price: (Number(l.unit_price_cents) || 0) / 100,
+                  vat_rate: Number(l.vat_percent) || 21,
+                  saved: true,
+                }))
+              );
+            }
+          } else {
+            showToast.error(res.error || 'No se pudo cargar el presupuesto.');
+          }
+        }
       } catch (err) {
         console.error('Error al cargar datos:', err);
+      } finally {
+        setLoaded(true);
       }
     }
     loadData();
-
-    const searchParams = new URLSearchParams(window.location.search);
-    if (searchParams.get('mode') === 'rectification') {
-      const rawData = sessionStorage.getItem('FacturON_rectification_data');
-      if (rawData) {
-        try {
-          const data = JSON.parse(rawData);
-          setSeriesCode('R');
-          setRectifiesInvoiceId(data.rectifiesInvoiceId);
-          setRectificationReason(data.rectificationReason);
-          setRectifiesNumber(data.rectifiesNumber);
-          setClientName(data.clientName);
-          setClientTaxId(data.clientTaxId);
-          setClientEmail(data.clientEmail);
-          setClientAddress(data.clientAddress);
-          if (data.lines && data.lines.length > 0) {
-            setLines(data.lines);
-          }
-          showToast.info(`Emitiendo Factura Rectificativa para ${data.rectifiesNumber}`);
-          sessionStorage.removeItem('FacturON_rectification_data');
-        } catch (e) {
-          console.error(e);
-        }
-      }
-    }
-  }, []);
+  }, [mode, estimateId]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -122,7 +136,6 @@ export default function NuevaFacturaPage() {
       setShowSuggestions(false);
       return;
     }
-
     const filtered = customerList.filter(
       (c) =>
         c.name?.toLowerCase().includes(value.toLowerCase()) ||
@@ -148,6 +161,7 @@ export default function NuevaFacturaPage() {
     setClientAddress('');
     setSuggestions([]);
     setShowSuggestions(false);
+    setClientNote(null);
     showToast.info('Datos del cliente limpiados');
   };
 
@@ -155,20 +169,20 @@ export default function NuevaFacturaPage() {
     setLines((prev) => {
       if (prev.length === 1 && !prev[0].description.trim() && Number(prev[0].unit_price) === 0) {
         return [{
-            description: product.description || product.name,
-            quantity: 1,
-            unit_price: product.unitPrice || product.price || 0,
-            vat_rate: product.vatPercent || product.default_vat || 21,
-            saved: true, 
-          }];
-      }
-      return [...prev, {
           description: product.description || product.name,
           quantity: 1,
           unit_price: product.unitPrice || product.price || 0,
           vat_rate: product.vatPercent || product.default_vat || 21,
-          saved: true, 
+          saved: true,
         }];
+      }
+      return [...prev, {
+        description: product.description || product.name,
+        quantity: 1,
+        unit_price: product.unitPrice || product.price || 0,
+        vat_rate: product.vatPercent || product.default_vat || 21,
+        saved: true,
+      }];
     });
     showToast.success('Concepto insertado desde el catálogo');
   };
@@ -176,20 +190,18 @@ export default function NuevaFacturaPage() {
   const handleQuickSaveProduct = async (index: number) => {
     const line = lines[index];
     if (!line.description) return;
-
     const formData = new FormData();
-    formData.append("name", line.description);
-    formData.append("price", String(line.unit_price));
-    formData.append("default_vat", String(line.vat_rate));
-
+    formData.append('name', line.description);
+    formData.append('price', String(line.unit_price));
+    formData.append('default_vat', String(line.vat_rate));
     const res = await createProductAction(formData);
     if (res.success) {
-      showToast.success("Concepto guardado en el catálogo");
+      showToast.success('Concepto guardado en el catálogo');
       const newLines = [...lines];
-      newLines[index].saved = true; 
+      newLines[index].saved = true;
       setLines(newLines);
     } else {
-      showToast.error(res.error || "Error al guardar en catálogo");
+      showToast.error(res.error || 'Error al guardar en catálogo');
     }
   };
 
@@ -203,12 +215,12 @@ export default function NuevaFacturaPage() {
   };
 
   const addLine = () => {
-    setLines([...lines, { description: '', quantity: 1, unit_price: 0, vat_rate: globalVat, saved: false }]);
+    setLines([...lines, { ...DEFAULT_LINE, vat_rate: globalVat }]);
   };
 
   const removeLine = (index: number) => {
     if (lines.length === 1) {
-      setLines([{ description: '', quantity: 1, unit_price: 0, vat_rate: globalVat, saved: false }]);
+      setLines([{ ...DEFAULT_LINE, vat_rate: globalVat }]);
       return;
     }
     setLines(lines.filter((_, i) => i !== index));
@@ -220,12 +232,11 @@ export default function NuevaFacturaPage() {
     const vatRate = parseFloat(String(l.vat_rate)) || globalVat;
     return acc + (lineSub * (vatRate / 100));
   }, 0);
-  const irpfTotal = subtotal * (parseFloat(String(irpfRate)) / 100);
-  const total = subtotal + vatTotal - irpfTotal;
+  const total = subtotal + vatTotal;
 
   const validateForm = () => {
-    if (!dueDate || !dueDate.trim()) {
-      showToast.error('Debes indicar la Fecha de Vencimiento.');
+    if (!expiryDate || !expiryDate.trim()) {
+      showToast.error('Debes indicar la Fecha de Validez del presupuesto.');
       return false;
     }
     if (!clientName.trim()) {
@@ -241,10 +252,9 @@ export default function NuevaFacturaPage() {
       return false;
     }
     if (lines.length === 0) {
-      showToast.error('La factura debe tener al menos una línea de concepto.');
+      showToast.error('El presupuesto debe tener al menos una línea de concepto.');
       return false;
     }
-
     const lineaInvalida = lines.find(
       (l) => !l.description || !l.description.trim() || Number(l.quantity) === 0
     );
@@ -252,68 +262,67 @@ export default function NuevaFacturaPage() {
       showToast.error('Todas las líneas deben tener una descripción y una cantidad válida distinta de 0.');
       return false;
     }
-
     return true;
   };
 
-  const handleStartSaveFlow = () => {
-    if (validateForm()) {
-      setIsConfirmReviewOpen(true);
-    }
-  };
+  const buildPayload = () => ({
+    customerData: {
+      nombre: clientName.trim(),
+      nif: clientTaxId.trim(),
+      email: clientEmail.trim(),
+      direccion: clientAddress.trim(),
+    },
+    expiryDate,
+    notes,
+    lines: lines.map((l) => ({
+      description: l.description,
+      quantity: l.quantity,
+      unit_price: l.unit_price,
+      vat_rate: l.vat_rate,
+    })),
+  });
 
-  const handleFinalEmit = async () => {
+  const saveEstimate = async (sendAfter: boolean) => {
+    if (!validateForm()) return;
     setLoading(true);
-
     try {
-      const element = document.getElementById('printable-invoice-preview-id');
-      let pdfBase64: string | undefined = undefined;
+      const payload = buildPayload();
+      const savedRes: any =
+        mode === 'edit' && estimateId
+          ? await updateEstimateAction(estimateId, payload)
+          : await createEstimateAction(payload);
 
-      if (element) {
-        const base64 = await generarFacturaBase64PDF(element);
-        if (base64) pdfBase64 = base64;
+      if (!savedRes.success) {
+        showToast.error(savedRes.error || 'Error al guardar el presupuesto.');
+        return;
       }
 
-      const result = await emitInvoiceAction({
-        seriesCode,
-        issuedDate,
-        dueDate,
-        paymentMethod,
-        irpfRate,
-        sendEmail: true,
-        pdfBase64,
-        rectifiesInvoiceId: rectifiesInvoiceId || undefined,
-        rectificationReason: rectificationReason || undefined,
-        customerData: {
-          nombre: clientName.trim(),
-          nif: clientTaxId.trim(),
-          email: clientEmail.trim(),
-          direccion: clientAddress.trim(),
-        },
-        lines,
-      });
-
-      if (result.success) {
-        setIsConfirmReviewOpen(false);
-        if (result.emailSent) {
-          showToast.success(`Factura emitida y enviada con PDF a ${clientEmail}`);
-        } else {
-          showToast.success('Factura emitida correctamente');
+      if (sendAfter) {
+        const sent = await sendEstimateAction(savedRes.estimateId);
+        if (!sent.success) {
+          showToast.error(
+            `Presupuesto guardado, pero no se pudo enviar: ${sent.error || ''}`
+          );
+          router.push('/historial');
+          return;
         }
-        router.push('/historial');
+        showToast.success(`Presupuesto ${savedRes.formattedNumber} guardado y enviado a ${sent.emailedTo}`);
+      } else {
+        showToast.success(`Presupuesto ${savedRes.formattedNumber} guardado en borrador`);
       }
-    } catch (error: any) {
-      showToast.error(error.message || 'Error al emitir la factura');
+      router.push('/historial');
+    } catch (err: any) {
+      showToast.error(err.message || 'Error al guardar el presupuesto.');
     } finally {
       setLoading(false);
     }
   };
 
   const previewFactura = {
-    id: 'preview-id',
-    formatted_number: `${seriesCode}-2026-XXXX`,
-    issued_at: issuedDate || new Date().toISOString(),
-    due_date: dueDate || undefined,
+    id: mode === 'edit' && estimateId ? estimateId : 'preview-id',
+    formatted_number: 'P-2026-XXXX',
+    issued_at: new Date().toISOString(),
+    expiry_date: expiryDate || undefined,
     client_name: clientName || 'Cliente General',
     client_tax_id: clientTaxId || '-',
     client_address: clientAddress || '-',
@@ -333,174 +342,135 @@ export default function NuevaFacturaPage() {
     }),
     subtotal_cents: Math.round(subtotal * 100),
     vat_total_cents: Math.round(vatTotal * 100),
-    irpf_total_cents: Math.round(irpfTotal * 100),
     total_cents: Math.round(total * 100),
-    qr_code_url: '',
-    invoice_hash: '',
   };
+
+  const editingModification = mode === 'edit' && currentStatus === 'Modificación solicitada';
 
   return (
     <div style={{ maxWidth: '1300px', margin: '0 auto', paddingBottom: '2rem' }}>
-      
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text-color)', margin: '0 0 2px 0' }}>
-            {seriesCode === 'R' ? `Factura Rectificativa (${rectifiesNumber})` : 'Crear Factura'}
+            {mode === 'edit' ? `Editar Presupuesto` : 'Nuevo Presupuesto'}
           </h2>
           <p style={{ margin: 0, color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            {seriesCode === 'R' ? 'Abono reglamentario encadenado a Veri*factu.' : 'Emite una nueva factura verificable (Veri*factu).'}
+            {mode === 'edit'
+              ? 'Modifica el presupuesto y vuelve a enviarlo con un enlace renovado.'
+              : 'Crea un presupuesto editable; al enviarlo tus cliente recibe un enlace para aceptarlo o pedir cambios.'}
           </p>
         </div>
-        
-        {/* BOTONES SUPERIORES */}
+
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={() => setIsPreviewOpen(true)}
             className="btn"
-            style={{ 
-              background: 'var(--bg-color)', 
-              color: 'var(--text-color)', 
-              border: '1px solid var(--border-color)', 
-              fontWeight: 600, 
-              fontSize: '0.85rem', 
-              padding: '0.4rem 0.9rem', 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '6px', 
-              cursor: 'pointer' 
+            style={{
+              background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)',
+              fontWeight: 600, fontSize: '0.85rem', padding: '0.4rem 0.9rem', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer',
             }}
           >
             <Eye style={{ width: '15px', height: '15px', color: 'var(--primary)' }} />
             <span>Vista Previa</span>
           </button>
-
-          <button 
-            type="button" 
-            onClick={handleStartSaveFlow}
+          <button
+            type="button"
+            onClick={() => saveEstimate(true)}
             disabled={loading}
             className="btn btn-primary"
             style={{ fontWeight: 600, fontSize: '0.85rem', padding: '0.4rem 0.9rem', display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            <CheckCircle style={{ width: '15px', height: '15px' }} />
-            <span>{seriesCode === 'R' ? 'Emitir Abono' : 'Guardar y Enviar'}</span>
+            <Send style={{ width: '15px', height: '15px' }} />
+            <span>Guardar y Enviar</span>
           </button>
         </div>
       </div>
 
-      <form onSubmit={(e) => { e.preventDefault(); handleStartSaveFlow(); }} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-        
-        {/* BLOQUE 1: DATOS DE FACTURA, FECHAS Y FORMA DE COBRO */}
+      {/* Banner al editar un presupuesto con cambios solicitados por el cliente */}
+      {editingModification && clientNote && (
+        <div style={{
+          padding: '12px 16px', borderRadius: '10px', marginBottom: '1rem',
+          backgroundColor: 'rgba(234,88,12,0.1)', border: '1px solid rgba(234,88,12,0.4)', color: 'var(--text-color)',
+          display: 'flex', gap: '12px', alignItems: 'flex-start',
+        }}>
+          <i className="fas fa-exclamation-triangle" style={{ color: '#ea580c', marginTop: '3px' }}></i>
+          <div>
+            <strong style={{ color: '#ea580c', fontSize: '0.85rem' }}>El cliente solicitó cambios</strong>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+              “{clientNote}” — al guardar, el presupuesto volverá a Borrador y deberás reenviarlo.
+            </p>
+          </div>
+        </div>
+      )}
+
+      <form
+        onSubmit={(e) => { e.preventDefault(); saveEstimate(true); }}
+        style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}
+      >
+        {/* BLOQUE 1: Nº Y VALIDEZ */}
         <div className="card" style={{ padding: '1rem 1.25rem' }}>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.3rem' }}>
-                {seriesCode === 'R' ? 'Serie Rectificativa' : 'Nº Factura'}
+                Nº Presupuesto
               </label>
-              <input 
-                type="text" 
-                value={seriesCode === 'R' ? 'Serie R (Automático)' : 'Automático (al emitir)'} 
-                disabled 
-                className="form-control" 
-                style={{ backgroundColor: 'var(--bg-color)', opacity: 0.8, cursor: 'not-allowed', height: '42px', fontSize: '0.85rem', color: seriesCode === 'R' ? '#dc2626' : undefined, fontWeight: seriesCode === 'R' ? 700 : undefined }} 
+              <input
+                type="text"
+                value="Automático (al guardar)"
+                disabled
+                className="form-control"
+                style={{ backgroundColor: 'var(--bg-color)', opacity: 0.8, cursor: 'not-allowed', height: '42px', fontSize: '0.85rem' }}
               />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.3rem' }}>
                 Fecha Emisión (Hoy)
               </label>
-              <input 
-                type="text" 
-                value={new Date(issuedDate).toLocaleDateString('es-ES')} 
-                disabled 
-                className="form-control" 
-                style={{ backgroundColor: 'var(--bg-color)', opacity: 0.8, cursor: 'not-allowed', height: '42px', fontSize: '0.85rem', fontWeight: 600 }} 
+              <input
+                type="text"
+                value={new Date().toLocaleDateString('es-ES')}
+                disabled
+                className="form-control"
+                style={{ backgroundColor: 'var(--bg-color)', opacity: 0.8, cursor: 'not-allowed', height: '42px', fontSize: '0.85rem' }}
               />
             </div>
             <div>
               <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.3rem' }}>
-                Fecha Vencimiento *
+                Fecha de Validez <span style={{ color: 'var(--danger)' }}>*</span>
               </label>
-              <input 
-                type="date" 
-                value={dueDate} 
-                onChange={(e) => setDueDate(e.target.value)} 
-                className="form-control" 
-                style={{ height: '42px', fontSize: '0.85rem' }} 
-                required 
+              <input
+                type="date"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+                className="form-control"
+                style={{ height: '42px', fontSize: '0.85rem' }}
+                required
               />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.3rem' }}>
-                Forma de Cobro
-              </label>
-              <select 
-                value={paymentMethod} 
-                onChange={(e) => setPaymentMethod(e.target.value)} 
-                className="form-control" 
-                style={{ 
-                  height: '42px', 
-                  fontSize: '0.85rem', 
-                  fontWeight: 600,
-                  padding: '0 0.75rem',
-                  lineHeight: '1.4'
-                }}
-              >
-                <option value="TRANSFERENCIA">Transferencia (Pendiente)</option>
-                <option value="TARJETA">Tarjeta / TPV (Pagada)</option>
-                <option value="EFECTIVO">Efectivo (Pagada)</option>
-                <option value="BIZUM">Bizum Directo (Pagada)</option>
-                <option value="DOMICILIACION">Giro Bancario (Pendiente)</option>
-              </select>
             </div>
           </div>
         </div>
 
-        {/* BLOQUE 2: DATOS DEL CLIENTE */}
-        <div className="card" style={{ padding: '1rem 1.25rem', overflow: 'visible' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem', flexWrap: 'wrap', gap: '8px' }}>
-            <div>
-              <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-color)', margin: 0 }}>Datos del Cliente</h3>
-              <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>Escribe para autocompletar o selecciona desde tu directorio.</p>
-            </div>
+        {/* BLOQUE 2: CLIENTE */}
+        <div className="card" style={{ padding: '1rem 1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-color)', margin: 0 }}>
+              Cliente (Presupuesto a)
+              <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: '0.75rem', marginLeft: '6px' }}>
+                El email es necesario para enviar el enlace de aceptación.
+              </span>
+            </h3>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button 
-                type="button" 
-                onClick={handleClearCustomer}
-                className="btn" 
-                style={{ 
-                  fontSize: '0.8rem', 
-                  backgroundColor: '#fee2e2', 
-                  color: '#dc2626', 
-                  border: '1px solid #fca5a5', 
-                  padding: '0.35rem 0.75rem', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '6px', 
-                  cursor: 'pointer',
-                  fontWeight: 600,
-                  borderRadius: '6px'
-                }}
-              >
-                <RotateCcw style={{ width: '13px', height: '13px' }} />
-                <span>Limpiar Cliente</span>
-              </button>
-
-              <button 
-                type="button" 
+              {clientName && (
+                <button type="button" onClick={handleClearCustomer} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '4px', minHeight: '32px' }} title="Limpiar cliente">
+                  <i className="fas fa-eraser"></i> Limpiar
+                </button>
+              )}
+              <button
+                type="button"
                 onClick={() => setIsCustomerModalOpen(true)}
-                className="btn" 
-                style={{ 
-                  fontSize: '0.8rem', 
-                  background: 'var(--bg-color)', 
-                  border: '1px solid var(--border-color)', 
-                  padding: '0.35rem 0.75rem', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '6px', 
-                  cursor: 'pointer',
-                  borderRadius: '6px'
-                }}
+                className="btn"
+                style={{ fontSize: '0.8rem', background: 'var(--bg-color)', border: '1px solid var(--border-color)', padding: '0.35rem 0.75rem', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', borderRadius: '6px' }}
               >
                 <Users style={{ width: '14px', height: '14px' }} />
                 <span>Directorio Completo</span>
@@ -508,47 +478,31 @@ export default function NuevaFacturaPage() {
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
             <div ref={customerInputRef} style={{ position: 'relative' }}>
-              <input 
-                type="text" 
-                value={clientName} 
+              <input
+                type="text"
+                value={clientName}
                 onChange={(e) => handleCustomerInputChange(e.target.value)}
-                onFocus={() => clientName.trim() && setSuggestions(customerList.filter(c => c.name?.toLowerCase().includes(clientName.toLowerCase())))}
-                placeholder="Nombre / Razón Social *" 
-                className="form-control" 
-                style={{ height: '36px', fontSize: '0.85rem' }} 
-                required 
+                placeholder="Nombre o Razón Social *"
+                className="form-control"
+                style={{ height: '36px', fontSize: '0.85rem' }}
+                required
                 autoComplete="off"
               />
-
               {showSuggestions && suggestions.length > 0 && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 'calc(100% + 4px)',
-                    left: 0,
-                    right: 0,
-                    backgroundColor: 'var(--card-bg)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    boxShadow: '0 10px 25px rgba(0,0,0,0.15)',
-                    zIndex: 50,
-                    maxHeight: '220px',
-                    overflowY: 'auto',
-                  }}
-                >
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 4px)', left: 0, right: 0,
+                  backgroundColor: 'var(--card-bg)', border: '1px solid var(--border-color)', borderRadius: '8px',
+                  boxShadow: '0 10px 25px rgba(0,0,0,0.15)', zIndex: 50, maxHeight: '220px', overflowY: 'auto',
+                }}>
                   {suggestions.map((c) => (
                     <div
                       key={c.id}
                       onClick={() => handleSelectCustomer(c)}
                       style={{
-                        padding: '8px 12px',
-                        borderBottom: '1px solid var(--border-color)',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '2px',
+                        padding: '8px 12px', borderBottom: '1px solid var(--border-color)', cursor: 'pointer',
+                        display: 'flex', flexDirection: 'column', gap: '2px',
                       }}
                       onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-color)')}
                       onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'var(--card-bg)')}
@@ -560,7 +514,6 @@ export default function NuevaFacturaPage() {
                 </div>
               )}
             </div>
-
             <div>
               <input type="text" value={clientTaxId} onChange={(e) => setClientTaxId(e.target.value)} placeholder="NIF / CIF *" className="form-control" style={{ height: '36px', fontSize: '0.85rem' }} required />
             </div>
@@ -577,11 +530,11 @@ export default function NuevaFacturaPage() {
         <div className="card" style={{ padding: '1rem 1.25rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
             <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-color)', margin: 0 }}>Conceptos</h3>
-            <button 
-              type="button" 
+            <button
+              type="button"
               onClick={() => setIsCatalogOpen(true)}
-              className="btn" 
-              style={{ fontSize: '0.8rem', background: 'var(--bg-color)', border: '1px solid var(--border-color)', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}
+              className="btn"
+              style={{ background: 'var(--bg-color)', border: '1px solid var(--border-color)', padding: '0.3rem 0.6rem', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.8rem' }}
             >
               <PackagePlus style={{ width: '14px', height: '14px' }} />
               <span>+ Insertar del Catálogo</span>
@@ -636,43 +589,38 @@ export default function NuevaFacturaPage() {
           </button>
         </div>
 
-        {/* BLOQUE 4: IMPUESTOS Y TOTALES */}
-        <div className="card" style={{ padding: '1rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1.5rem' }}>
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        {/* BLOQUE 4: IVA, TOTALES Y NOTAS */}
+        <div className="card" style={{ padding: '1rem 1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1.5rem' }}>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-end', flexWrap: 'wrap' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.3rem' }}>
                 IVA GENERAL (%)
               </label>
-              <input 
-                type="number" 
+              <input
+                type="number"
                 min="0"
                 max="100"
                 step="1"
-                value={globalVat} 
+                value={globalVat}
                 onChange={(e) => {
                   const val = Number(e.target.value);
                   setGlobalVat(Math.max(0, Math.min(100, isNaN(val) ? 0 : val)));
-                }} 
-                className="form-control" 
-                style={{ width: '80px', textAlign: 'center', height: '36px', fontSize: '0.85rem' }} 
+                }}
+                className="form-control"
+                style={{ width: '80px', textAlign: 'center', height: '36px', fontSize: '0.85rem' }}
               />
             </div>
-            <div>
+            <div style={{ flexGrow: 1, minWidth: '280px' }}>
               <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '0.3rem' }}>
-                RETENCIÓN IRPF (%)
+                Notas para el presupuesto
               </label>
-              <input 
-                type="number" 
-                min="0"
-                max="100"
-                step="1"
-                value={irpfRate} 
-                onChange={(e) => {
-                  const val = Number(e.target.value);
-                  setIrpfRate(Math.max(0, Math.min(100, isNaN(val) ? 0 : val)));
-                }} 
-                className="form-control" 
-                style={{ width: '80px', textAlign: 'center', height: '36px', fontSize: '0.85rem' }} 
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+                className="form-control"
+                placeholder="Condiciones, plazos de entrega, observaciones…"
+                style={{ fontSize: '0.85rem', resize: 'vertical' }}
               />
             </div>
           </div>
@@ -686,12 +634,6 @@ export default function NuevaFacturaPage() {
               <span>IVA Repercutido:</span>
               <span style={{ fontWeight: 600, color: 'var(--text-color)' }}>+{vatTotal.toFixed(2)} €</span>
             </div>
-            {irpfTotal > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', color: '#ef4444' }}>
-                <span>Retención IRPF:</span>
-                <span style={{ fontWeight: 600 }}>-{irpfTotal.toFixed(2)} €</span>
-              </div>
-            )}
             <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '2px solid var(--border-color)', paddingTop: '6px', fontSize: '1.1rem', fontWeight: 900, color: 'var(--text-color)', marginTop: '2px' }}>
               <span>Total Final:</span>
               <span>{total.toFixed(2)} €</span>
@@ -699,31 +641,66 @@ export default function NuevaFacturaPage() {
           </div>
         </div>
 
+        {/* PIE: ACCIONES */}
+        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', alignItems: 'center', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={() => saveEstimate(false)}
+            disabled={loading}
+            className="btn"
+            style={{
+              background: 'var(--bg-color)', color: 'var(--text-color)', border: '1px solid var(--border-color)',
+              padding: '0.5rem 1rem', fontSize: '0.85rem', fontWeight: 600, borderRadius: '6px',
+              display: 'flex', alignItems: 'center', gap: '6px', cursor: loading ? 'not-allowed' : 'pointer',
+            }}
+          >
+            <Save style={{ width: '15px', height: '15px' }} />
+            <span>Guardar Borrador</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => saveEstimate(true)}
+            disabled={loading}
+            className="btn btn-primary"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '0.5rem 1.15rem', fontSize: '0.85rem', fontWeight: 700 }}
+          >
+            {loading ? <i className="fas fa-spinner fa-spin"></i> : <Send style={{ width: '15px', height: '15px' }} />}
+            <span>Guardar y Enviar</span>
+          </button>
+        </div>
       </form>
 
-      {/* 1. VISOR DE VISTA PREVIA (Solo consulta) */}
-      <InvoiceModalClient
-        factura={previewFactura}
-        empresa={empresa}
-        templateId={templateId}
-        variant="preview-only"
-        isOpen={isPreviewOpen}
-        onClose={() => setIsPreviewOpen(false)}
-      />
+      {/* VISOR DE VISTA PREVIA */}
+      {isPreviewOpen && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          zIndex: 2147483647, backgroundColor: 'var(--bg-color)', display: 'flex', flexDirection: 'column',
+        }}>
+          <div style={{
+            backgroundColor: 'var(--card-bg)', padding: '1rem 2rem', borderBottom: '1px solid var(--border-color)',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0,
+          }}>
+            <h3 style={{ margin: 0, fontSize: '1.1rem', color: 'var(--text-color)', fontWeight: 800 }}>
+              Vista previa del presupuesto
+            </h3>
+            <button type="button" onClick={() => setIsPreviewOpen(false)} style={{ background: 'none', border: 'none', fontSize: '2.2rem', cursor: 'pointer', color: '#64748b', lineHeight: '1rem', padding: '0 5px' }} title="Cerrar">
+              &times;
+            </button>
+          </div>
+          <div style={{ flexGrow: 1, overflowY: 'auto', padding: '2rem', display: 'flex', justifyContent: 'center' }}>
+            <div style={{ width: '100%', maxWidth: '900px' }}>
+              {loaded ? (
+                <InvoicePDFTemplate factura={previewFactura} empresa={empresa} settings={{ template_id: templateId }} templateId={templateId} isEstimate />
+              ) : (
+                <div style={{ textAlign: 'center', padding: '4rem', color: 'var(--text-muted)' }}>
+                  <i className="fas fa-spinner fa-spin" style={{ fontSize: '1.6rem' }}></i>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
-      {/* 2. VISOR DE REVISIÓN Y CONFIRMACIÓN OBLIGATORIA */}
-      <InvoiceModalClient
-        factura={previewFactura}
-        empresa={empresa}
-        templateId={templateId}
-        variant="confirm-emit"
-        isOpen={isConfirmReviewOpen}
-        onClose={() => setIsConfirmReviewOpen(false)}
-        onSave={handleFinalEmit}
-        saving={loading}
-      />
-
-      {/* MODALES DE CATÁLOGO Y CLIENTES */}
       <ProductCatalogSelector
         isOpen={isCatalogOpen}
         onClose={() => setIsCatalogOpen(false)}
@@ -736,7 +713,6 @@ export default function NuevaFacturaPage() {
         customers={customerList}
         onSelectCustomer={handleSelectCustomer}
       />
-
     </div>
   );
 }

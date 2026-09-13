@@ -37,7 +37,7 @@ export async function deleteCustomerAction(customerId: string) {
     });
 
     revalidatePath('/clientes');
-    revalidatePath('/nueva-factura');
+    revalidatePath('/nuevoPresupuesto');
     return { success: true };
   } catch (error: any) {
     console.error('Error al ocultar cliente:', error);
@@ -80,7 +80,7 @@ export async function createCustomerAction(formData: FormData) {
     });
 
     revalidatePath("/clientes");
-    revalidatePath("/nueva-factura");
+    revalidatePath("/nuevoPresupuesto");
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err?.message || "Error al crear cliente" };

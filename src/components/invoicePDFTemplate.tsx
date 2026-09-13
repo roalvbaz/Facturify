@@ -6,22 +6,28 @@ export default function InvoicePDFTemplate({
   empresa,
   settings,
   templateId,
+  isEstimate: isEstimateProp = false,
 }: {
   factura: any;
   empresa: any;
   settings?: any;
   templateId?: string;
+  isEstimate?: boolean;
 }) {
   const isRectification =
-    factura.series_code === 'R' ||
-    factura.formatted_number?.startsWith('R-') ||
-    Boolean(factura.rectifies_invoice_id);
+    !isEstimateProp &&
+    (factura.series_code === 'R' ||
+      factura.formatted_number?.startsWith('R-') ||
+      Boolean(factura.rectifies_invoice_id));
+
+  const isEstimate = isEstimateProp || factura.__is_estimate === true;
 
   const template = templateId ? getTemplateById(templateId) : null;
 
-  const primaryColor = isRectification
-    ? '#dc2626'
-    : (template?.accentColor || settings?.theme_color || empresa?.theme_color || '#4f46e5');
+  const primaryColor =
+    isRectification
+      ? '#dc2626'
+      : (template?.accentColor || settings?.theme_color || empresa?.theme_color || '#4f46e5');
 
   const secondaryColor = template?.secondaryColor || primaryColor;
 
@@ -60,6 +66,12 @@ export default function InvoicePDFTemplate({
   const showFooter = template ? (template.showFooter !== false) : true;
 
   const logoUrl = settings?.logo_url || empresa?.logo_url || null;
+
+  const documentTitle = isEstimate
+    ? 'PRESUPUESTO'
+    : isRectification
+      ? 'FACTURA RECTIFICATIVA'
+      : 'FACTURA';
 
   return (
     <div
@@ -111,12 +123,14 @@ export default function InvoicePDFTemplate({
               </div>
               <div style={{ textAlign: headerTextAlign === 'right' ? 'right' : headerTextAlign === 'center' ? 'center' : 'left' }}>
                 <div style={{ fontSize: isRectification ? '16px' : '22px', fontWeight: 'bold', marginBottom: '6px' }}>
-                  {isRectification ? 'FACTURA RECTIFICATIVA' : 'FACTURA'}
+                  {documentTitle}
                 </div>
                 <div style={{ fontSize: '11px', opacity: 0.9 }}>
                   <div>Nº: <strong>{factura.formatted_number}</strong></div>
                   <div>Fecha: {factura.issued_at ? new Date(factura.issued_at).toLocaleDateString('es-ES') : '-'}</div>
-                  {factura.due_date && <div>Vence: {new Date(factura.due_date).toLocaleDateString('es-ES')}</div>}
+                  {isEstimate
+                    ? factura.expiry_date && <div>Validez: {new Date(factura.expiry_date).toLocaleDateString('es-ES')}</div>
+                    : factura.due_date && <div>Vence: {new Date(factura.due_date).toLocaleDateString('es-ES')}</div>}
                 </div>
               </div>
             </div>
@@ -145,7 +159,7 @@ export default function InvoicePDFTemplate({
               </td>
               <td style={{ width: '45%', verticalAlign: 'top', textAlign: 'right', paddingBottom: '8px' }}>
                 <div style={{ fontSize: isRectification ? '16px' : '22px', fontWeight: 'bold', color: primaryColor, marginBottom: '6px' }}>
-                  {isRectification ? 'FACTURA RECTIFICATIVA' : 'FACTURA'}
+                  {documentTitle}
                 </div>
                 <table style={{ marginLeft: 'auto', borderCollapse: 'collapse', fontSize: '11px' }}>
                   <tbody>
@@ -159,14 +173,23 @@ export default function InvoicePDFTemplate({
                         {factura.issued_at ? new Date(factura.issued_at).toLocaleDateString('es-ES') : '-'}
                       </td>
                     </tr>
-                    {factura.due_date && (
-                      <tr>
-                        <td style={{ padding: '2px 6px', color: '#64748b', fontWeight: 'bold', textAlign: 'right' }}>Vencimiento:</td>
-                        <td style={{ padding: '2px 0', color: '#0f172a', textAlign: 'right' }}>
-                          {new Date(factura.due_date).toLocaleDateString('es-ES')}
-                        </td>
-                      </tr>
-                    )}
+                    {isEstimate
+                      ? factura.expiry_date && (
+                        <tr>
+                          <td style={{ padding: '2px 6px', color: '#64748b', fontWeight: 'bold', textAlign: 'right' }}>Validez:</td>
+                          <td style={{ padding: '2px 0', color: '#0f172a', textAlign: 'right' }}>
+                            {new Date(factura.expiry_date).toLocaleDateString('es-ES')}
+                          </td>
+                        </tr>
+                      )
+                      : factura.due_date && (
+                        <tr>
+                          <td style={{ padding: '2px 6px', color: '#64748b', fontWeight: 'bold', textAlign: 'right' }}>Vencimiento:</td>
+                          <td style={{ padding: '2px 0', color: '#0f172a', textAlign: 'right' }}>
+                            {new Date(factura.due_date).toLocaleDateString('es-ES')}
+                          </td>
+                        </tr>
+                      )}
                   </tbody>
                 </table>
               </td>
@@ -175,8 +198,8 @@ export default function InvoicePDFTemplate({
         </table>
         )}
 
-        {/* RECTIFICACIÓN (SI APLICA) */}
-        {isRectification && (
+        {/* RECTIFICACIÓN (SI APLICA) — oculta en presupuestos */}
+        {isRectification && !isEstimate && (
           <div style={{ marginBottom: '12px', padding: '6px 10px', backgroundColor: '#fef2f2', border: '1px solid #fecaca', borderRadius: '4px' }}>
             <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#dc2626', textTransform: 'uppercase', marginBottom: '2px' }}>
               Documento de Rectificación (RD 1619/2012)
@@ -193,7 +216,7 @@ export default function InvoicePDFTemplate({
             <tr>
               <td style={{ padding: '10px 14px' }}>
                 <div style={{ fontSize: '9px', fontWeight: 'bold', color: '#64748b', textTransform: 'uppercase', marginBottom: '3px' }}>
-                  FACTURAR A:
+                  {isEstimate ? 'PRESUPUESTO A:' : 'FACTURAR A:'}
                 </div>
                 <div style={{ fontSize: '13px', fontWeight: 'bold', color: '#0f172a', marginBottom: '2px' }}>
                   {factura.client_name || 'Cliente General'}
@@ -295,37 +318,51 @@ export default function InvoicePDFTemplate({
           </tbody>
         </table>
 
-        {/* PIE DE PÁGINA VERI*FACTU + QR — SIEMPRE visibles (obligatorio).
-             showFooter solo controla la línea de marca decorativa. */}
+        {/* PIE DE PÁGINA — Veri*factu + QR para facturas; nota de validez para presupuestos */}
         <table style={{ width: '100%', borderCollapse: 'collapse', borderTop: '1px solid #e2e8f0', paddingTop: '8px' }}>
           <tbody>
             <tr>
               <td style={{ verticalAlign: 'middle', width: '80%', paddingRight: '12px', paddingTop: '6px' }}>
-                <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#334155', marginBottom: '2px' }}>
-                  Factura Verificada (Veri*factu)
-                </div>
-                <div style={{ fontSize: '9px', color: '#64748b', lineHeight: '1.2', marginBottom: '2px' }}>
-                  Emitido al amparo del Reglamento que regula los requisitos de los sistemas informáticos de facturación (Real Decreto 1007/2023).
-                </div>
+                {isEstimate ? (
+                  <>
+                    <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#334155', marginBottom: '2px' }}>
+                      Presupuesto sin compromiso
+                    </div>
+                    <div style={{ fontSize: '9px', color: '#64748b', lineHeight: '1.2', marginBottom: '2px' }}>
+                      Al aceptarlo se emitirá la factura correspondiente. Si tiene dudas, contacte con {empresa?.name || empresa?.nombre || 'su emisor'}.
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ fontSize: '10px', fontWeight: 'bold', color: '#334155', marginBottom: '2px' }}>
+                      Factura Verificada (Veri*factu)
+                    </div>
+                    <div style={{ fontSize: '9px', color: '#64748b', lineHeight: '1.2', marginBottom: '2px' }}>
+                      Emitido al amparo del Reglamento que regula los requisitos de los sistemas informáticos de facturación (Real Decreto 1007/2023).
+                    </div>
+                  </>
+                )}
                 {showFooter && (
                   <div style={{ fontSize: '9px', color: primaryColor, fontWeight: 'bold' }}>
-                    Generado de forma segura con FacturON
+                    {isEstimate ? 'Generado con FacturON' : 'Generado de forma segura con FacturON'}
                   </div>
                 )}
               </td>
-              <td style={{ verticalAlign: 'middle', width: '20%', textAlign: 'right', paddingTop: '6px' }}>
-                {factura.qr_code_url ? (
-                  <img 
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(factura.qr_code_url)}`} 
-                    alt="QR" 
-                    style={{ width: '44px', height: '44px', border: '1px solid #e2e8f0', padding: '2px', backgroundColor: '#ffffff', display: 'inline-block' }} 
-                  />
-                ) : (
-                  <div style={{ width: '44px', height: '44px', border: '1px dashed #cbd5e1', display: 'inline-block', lineHeight: '44px', fontSize: '8px', color: '#94a3b8', textAlign: 'center' }}>
-                    QR
-                  </div>
-                )}
-              </td>
+              {!isEstimate && (
+                <td style={{ verticalAlign: 'middle', width: '20%', textAlign: 'right', paddingTop: '6px' }}>
+                  {factura.qr_code_url ? (
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(factura.qr_code_url)}`}
+                      alt="QR"
+                      style={{ width: '44px', height: '44px', border: '1px solid #e2e8f0', padding: '2px', backgroundColor: '#ffffff', display: 'inline-block' }}
+                    />
+                  ) : (
+                    <div style={{ width: '44px', height: '44px', border: '1px dashed #cbd5e1', display: 'inline-block', lineHeight: '44px', fontSize: '8px', color: '#94a3b8', textAlign: 'center' }}>
+                      QR
+                    </div>
+                  )}
+                </td>
+              )}
             </tr>
           </tbody>
         </table>

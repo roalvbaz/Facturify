@@ -31,8 +31,6 @@ export default function RootLayout({
           rel="stylesheet"
         />
         <link rel="icon" href='logo.png'/>
-        {/* CARGAMOS HTML2PDF DESDE CDN PARA EVITAR ERRORES DE NPM */}
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" async></script>
       </head>
       <body style={{ margin: 0, padding: 0, minHeight: '100vh', backgroundColor: 'var(--bg-color)', color: 'var(--text-main)', transition: 'background-color 0.2s ease, color 0.2s ease' }}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>

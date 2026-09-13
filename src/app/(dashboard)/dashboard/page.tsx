@@ -181,7 +181,7 @@ export default async function DashboardPage() {
               Resumen Financiero
             </h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
-              {miEmpresa.name} &middot; Rol: {miEmpresa.role}
+              {miEmpresa.name}
             </p>
           </div>
         </div>

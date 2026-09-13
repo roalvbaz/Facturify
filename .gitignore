@@ -1,21 +1,16 @@
 .env
-.cloudflare/
+.claude
 .cloudflare
-.github/
 .github
-node_modules/
 node_modules
-docs/
 docs
-dist/
 dist
-build/
 build
-.next/
 .next
 .claude
 .github
 drizzle
+supabase
 
 # Manual local de operaciones (no se sube a GitHub)
 README-OPERACIONES.md

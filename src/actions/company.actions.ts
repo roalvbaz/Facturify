@@ -251,7 +251,7 @@ export async function updateCompanySettingsAction(formData: FormData) {
     revalidatePath("/(dashboard)", "layout");
     revalidatePath("/configuracion");
     revalidatePath("/historial");
-    revalidatePath("/nueva-factura");
+    revalidatePath("/nueva");
 
     return { success: true };
   } catch (err: any) {
@@ -284,7 +284,7 @@ export async function updateTemplateAction(templateId: string) {
 
     revalidatePath("/(dashboard)", "layout");
     revalidatePath("/configuracion");
-    revalidatePath("/nueva-factura");
+    revalidatePath("/nuevoPresupuesto");
     revalidatePath("/historial");
 
     return { success: true };

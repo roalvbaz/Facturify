@@ -49,7 +49,6 @@ export default function Sidebar({
   emailUsuario,
   isAdmin,
   isOpen,
-  onClose,
 }: {
   companies: Array<{ id: string; name: string; tax_id: string; role: string }>;
   activeCompanyId: string;
@@ -176,8 +175,8 @@ export default function Sidebar({
         <Link href="/dashboard" style={linkStyle(isActive('/dashboard'))}>
           <i className="fas fa-chart-pie" style={{ width: '20px', textAlign: 'center', fontSize: '0.9rem' }}></i> Dashboard
         </Link>
-        <Link href="/nueva-factura" style={linkStyle(isActive('/nueva-factura'))}>
-          <i className="fas fa-plus-circle" style={{ width: '20px', textAlign: 'center', fontSize: '0.9rem' }}></i> Nueva Factura
+        <Link href="/nuevoPresupuesto" style={linkStyle(isActive('/nuevoPresupuesto'))}>
+          <i className="fas fa-file-signature" style={{ width: '20px', textAlign: 'center', fontSize: '0.9rem' }}></i> Nuevo Presupuesto
         </Link>
         <Link href="/historial" style={linkStyle(isActive('/historial'))}>
           <i className="fas fa-list" style={{ width: '20px', textAlign: 'center', fontSize: '0.9rem' }}></i> Historial

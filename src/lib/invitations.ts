@@ -3,7 +3,10 @@ import { sql, eq, desc } from 'drizzle-orm';
 import { db } from '@/db';
 import { invitations } from '@/db/schema';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { sendRegistrationInvitationEmail } from '@/lib/email/email';
+import {
+  sendRegistrationInvitationEmail,
+  sendCompanyMemberInvitationEmail,
+} from '@/lib/email/email';
 import { logAuditEvent } from '@/lib/audit';
 
 /** El enlace de registro caduca a los 7 días */
@@ -25,12 +28,24 @@ export function getRegisterLink(token: string): string {
   return `${getSiteUrl()}/registro?invite=${token}`;
 }
 
+/** Enlace de aceptación para usuarios que YA tienen cuenta en FacturON. */
+export function getAcceptanceLink(token: string): string {
+  return `${getSiteUrl()}/aceptar-invitacion?invite=${token}`;
+}
+
+/** Etiqueta legible para un rol de miembro (OWNER/ADMIN/MEMBER). */
+export function roleLabel(role?: string | null): string | undefined {
+  if (role === 'ADMIN') return 'Administrador';
+  if (role === 'OWNER') return 'Propietario';
+  return role ? 'Miembro' : undefined;
+}
+
 /**
  * Busca el id del usuario en Supabase Auth por email.
  * Solo lectura sobre `auth.users`, necesaria cuando el usuario ya
  * existía (p. ej. invitación anterior) y no podemos crearlo otra vez.
  */
-async function getAuthUserIdByEmail(email: string): Promise<string | null> {
+export async function getAuthUserIdByEmail(email: string): Promise<string | null> {
   try {
     const rows = await db.execute<{ id: string }>(
       sql`select id from auth.users where lower(email) = lower(${email}) limit 1`
@@ -80,37 +95,64 @@ export type CreateInvitationResult =
   | { ok: false; error: string };
 
 /**
- * Crea (o renueva) la invitación de registro para un email y, si se pide,
- * envía el correo con el enlace a la página de registro.
+ * Crea (o renueva) una invitación para un email y, si se pide, envía el correo.
  *
- * Reglas:
- *  - Si el email ya tiene cuenta registrada → error.
- *  - Si ya hay una invitación ENVIADA → se regenera el token (el enlace
- *    anterior queda invalidado) y se reenvía el correo.
- *  - Si no existe → se crea el usuario en Supabase (solo email) y el registro.
+ * Dos modos según `opts.companyId`:
+ *
+ *  - PLATAFORMA (companyId = null): flujo clásico de /invitaciones. El
+ *    invitado NO tiene cuenta aún y entra por /registro?invite=... a crear
+ *    su perfil. Si el email ya se registró → error.
+ *
+ *  - EQUIPO (companyId presente): un OWNER/ADMIN invita a alguien a una
+ *    empresa.
+ *      · Si el email YA tiene cuenta en FacturON → correo de ACEPTACIÓN
+ *        con enlace a /aceptar-invitacion?invite=... (solo acepta).
+ *      · Si NO tiene cuenta → se le pre-crea la cuenta (solo email) y recibe
+ *        el correo de REGISTRO con /registro?invite=...; al darse de alta
+ *        quedará vinculado a la empresa con `invited_role`.
+ *
+ * Si ya hay una invitación pendiente (ENVIADA) para ese email/empresa se
+ * regenera el token (el enlace anterior queda invalidado) y se reenvía.
  */
 export async function createInvitation(opts: {
   email: string;
   createdBy?: string | null;
   sendEmail?: boolean;
+  companyId?: string | null;
+  invitedRole?: 'MEMBER' | 'ADMIN';
+  companyName?: string | null;
 }): Promise<CreateInvitationResult> {
   const email = opts.email.trim().toLowerCase();
   if (!email) {
     return { ok: false, error: 'El email es obligatorio' };
   }
 
+  const isCompanyInvite = Boolean(opts.companyId);
+
   try {
-    // Invitación más reciente de este email
+    const role = opts.invitedRole === 'ADMIN' ? 'ADMIN' : 'MEMBER';
+
+    // Invitación más reciente de este email (del mismo tipo).
     const [latest] = await db
       .select()
       .from(invitations)
-      .where(sql`lower(${invitations.email}) = ${email}`)
+      .where(
+        isCompanyInvite
+          ? sql`lower(${invitations.email}) = ${email} and ${invitations.company_id} = ${opts.companyId}`
+          : sql`lower(${invitations.email}) = ${email} and ${invitations.company_id} is null`
+      )
       .orderBy(desc(invitations.created_at))
       .limit(1);
 
-    if (latest?.status === 'REGISTRADA') {
+    if (!isCompanyInvite && latest?.status === 'REGISTRADA') {
       return { ok: false, error: `El email ${email} ya creó su cuenta.` };
     }
+    if (latest?.status === 'REGISTRADA') {
+      return { ok: false, error: `El email ${email} ya aceptó la invitación a esa empresa.` };
+    }
+
+    // En modo EQUIPO distinguimos cuentas existentes (aceptación) de nuevas (registro).
+    const existingUserId = isCompanyInvite ? await getAuthUserIdByEmail(email) : null;
 
     const token = crypto.randomBytes(24).toString('hex');
     const tokenHash = hashToken(token);
@@ -124,11 +166,17 @@ export async function createInvitation(opts: {
       // Renovamos la invitación pendiente existente (se invalida el enlace previo)
       await db
         .update(invitations)
-        .set({ token, token_hash: tokenHash, expires_at: expiresAt })
+        .set({
+          token,
+          token_hash: tokenHash,
+          expires_at: expiresAt,
+          created_by: opts.createdBy ?? null,
+          ...(isCompanyInvite ? { company_id: opts.companyId, invited_role: role } : {}),
+        })
         .where(eq(invitations.id, latest.id));
       invitationId = latest.id;
     } else {
-      // Nueva invitación: creamos el usuario en Auth (solo email, sin contraseña)
+      // Nueva invitación: el usuario de Auth debe existir (empresa: se crea si no)…
       const userId = await ensureSupabaseUser(email);
       const [row] = await db
         .insert(invitations)
@@ -140,28 +188,52 @@ export async function createInvitation(opts: {
           status: 'ENVIADA',
           expires_at: expiresAt,
           created_by: opts.createdBy ?? null,
+          ...(isCompanyInvite ? { company_id: opts.companyId, invited_role: role } : {}),
         })
         .returning({ id: invitations.id });
       invitationId = row.id;
       created = true;
     }
 
-    // Auditoría: nueva invitación o renovación de enlace (emisor = createdBy).
-    await logAuditEvent({
-      eventCode: created ? 'INVITATION_CREATED' : 'INVITATION_RENEWED',
-      description: created
-        ? `Invitación de registro creada para ${email}`
-        : `Enlace de invitación renovado para ${email}`,
-      userId: opts.createdBy ?? null,
-      metadata: { email, invitationId },
-    });
-
-    // Envío opcional del correo con el enlace de registro
-    if (opts.sendEmail) {
-      const mail = await sendRegistrationInvitationEmail({
-        to: email,
-        registerLink: getRegisterLink(token),
+    // Auditoría (con contexto de empresa cuando aplica).
+    if (isCompanyInvite) {
+      await logAuditEvent({
+        eventCode: created ? 'COMPANY_MEMBER_INVITED' : 'INVITATION_RENEWED',
+        description: created
+          ? `Invitación a ${email} para unirse a la empresa como ${roleLabel(role)}`
+          : `Enlace de invitación de equipo renovado para ${email}`,
+        userId: opts.createdBy ?? null,
+        companyId: opts.companyId,
+        metadata: { email, invitationId, role },
       });
+    } else {
+      await logAuditEvent({
+        eventCode: created ? 'INVITATION_CREATED' : 'INVITATION_RENEWED',
+        description: created
+          ? `Invitación de registro creada para ${email}`
+          : `Enlace de invitación renovado para ${email}`,
+        userId: opts.createdBy ?? null,
+        metadata: { email, invitationId },
+      });
+    }
+
+    // Envío opcional del correo (aceptación si tiene cuenta, registro si es nueva)
+    if (opts.sendEmail) {
+      let mail: { success: boolean; error?: string };
+      if (isCompanyInvite && existingUserId) {
+        mail = await sendCompanyMemberInvitationEmail({
+          to: email,
+          acceptLink: getAcceptanceLink(token),
+          companyName: opts.companyName || 'tu empresa',
+          roleLabel: roleLabel(role),
+        });
+      } else {
+        mail = await sendRegistrationInvitationEmail({
+          to: email,
+          registerLink: getRegisterLink(token),
+          ...(opts.companyName ? { companyName: opts.companyName, roleLabel: roleLabel(role) } : {}),
+        });
+      }
       return {
         ok: true,
         invitationId,
@@ -203,7 +275,7 @@ export async function getRegisterLinkForInvitation(
   return getRegisterLink(row.token);
 }
 
-/** Lista las invitaciones para la pantalla de administración (sin token). */
+/** Lista SOLO las invitaciones de plataforma para /invitaciones (sin token). */
 export async function listInvitations(): Promise<
   Array<{
     id: string;
@@ -226,6 +298,7 @@ export async function listInvitations(): Promise<
       created_by: invitations.created_by,
     })
     .from(invitations)
+    .where(sql`${invitations.company_id} is null`)
     .orderBy(desc(invitations.created_at))
     .limit(500);
 }
@@ -240,6 +313,8 @@ export async function getInvitationByToken(token: string) {
       status: invitations.status,
       expires_at: invitations.expires_at,
       responded_at: invitations.responded_at,
+      company_id: invitations.company_id,
+      invited_role: invitations.invited_role,
     })
     .from(invitations)
     .where(eq(invitations.token_hash, hashToken(token)))

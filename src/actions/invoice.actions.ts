@@ -12,6 +12,7 @@ import { sendInvoiceEmail } from '@/lib/email/email';
 import { buildAltaXML } from '@/lib/verifactu/xml/builder';
 import { addToQueue } from '@/lib/verifactu/queue/manager';
 import { CLAVE_REGIMEN } from '@/lib/verifactu/xml/types';
+import { renderInvoicePdfBuffer } from '@/lib/pdf/invoicePdf';
 
 function construirUrlQr({ emisorNif, numeroFactura, totalCentimos, fechaExpedicion }: {
   emisorNif: string;
@@ -58,7 +59,6 @@ interface EmitInvoicePayload {
   paymentMethod?: string;
   irpfRate?: number;
   sendEmail?: boolean;
-  pdfBase64?: string;
   rectifiesInvoiceId?: string;
   rectificationReason?: string;
   customerData?: {
@@ -73,6 +73,7 @@ interface EmitInvoicePayload {
     unit_price: number | string;
     vat_rate?: number | string;
   }>;
+  /** Deprecado: el PDF se genera en servidor al emitir (ver renderInvoicePdfBuffer). */
 }
 
 export async function emitInvoiceAction(payload: EmitInvoicePayload) {
@@ -366,16 +367,52 @@ export async function emitInvoiceAction(payload: EmitInvoicePayload) {
     }
 
     // ENVÍO AUTOMÁTICO DIRECTO AL CLIENTE (SIN COPIA AL EMISOR)
+    // El PDF se genera EN EL SERVIDOR (sin html2canvas/CDN → nunca se cuelga).
     let emailSent = false;
     if (payload.sendEmail !== false && clientEmail) {
       try {
+        let pdfBase64: string | undefined;
+        try {
+          const [cfg] = await db
+            .select()
+            .from(company_settings)
+            .where(eq(company_settings.company_id, activeCompanyId))
+            .limit(1);
+
+          const buffer = await renderInvoicePdfBuffer({
+            factura: {
+              formatted_number: formattedInvoiceNumber,
+              series_code: seriesCode,
+              issued_at: issuedAt,
+              due_date: parsedDueDate,
+              rectifies_invoice_id: payload.rectifiesInvoiceId || null,
+              rectification_reason: payload.rectificationReason || null,
+              client_name: clientName,
+              client_tax_id: clientTaxId,
+              client_address: clientAddress,
+              subtotal_cents: subtotalCents,
+              vat_total_cents: vatTotalCents,
+              irpf_total_cents: irpfPercent > 0 ? irpfTotalCents : 0,
+              total_cents: totalCents,
+              qr_code_url: qrUrl,
+              lines: formattedLines,
+            },
+            empresa: { name: membre.name, tax_id: membre.tax_id, address: membre.address },
+            settings: cfg || undefined,
+          });
+          pdfBase64 = buffer.toString('base64');
+        } catch (pdfErr) {
+          // Si falla el PDF no rompemos la emisión; se manda el email sin adjunto.
+          console.error('⚠️ Error generando PDF en emisión:', pdfErr);
+        }
+
         await sendInvoiceEmail({
           to: clientEmail,
           clientName: clientName,
           invoiceNumber: formattedInvoiceNumber,
           totalEur: (totalCents / 100).toFixed(2),
           companyName: membre.name,
-          pdfBase64: payload.pdfBase64,
+          pdfBase64,
         });
         emailSent = true;
       } catch (mailErr) {
@@ -474,5 +511,89 @@ export async function getCompanyCustomersAction() {
   } catch (error: any) {
     console.error("❌ ERROR AL OBTENER CLIENTES:", error);
     return { success: false, customers: [] };
+  }
+}
+
+// ============================================================
+// PDF EN SERVIDOR — descarga / adjunto de una factura guardada
+// ============================================================
+
+/**
+ * Genera el PDF de una factura GUARDADA de la empresa activa y lo devuelve
+ * en base64. Verifica que la factura pertenezca a una empresa del usuario.
+ * Lo usan la descarga desde el modal y el adjunto del email.
+ */
+export async function getInvoicePdfBase64Action(invoiceId: string) {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error("No autorizado");
+
+    const [inv] = await db
+      .select()
+      .from(invoices)
+      .where(eq(invoices.id, invoiceId))
+      .limit(1);
+    if (!inv) throw new Error("Factura no encontrada");
+
+    // El usuario debe pertenecer a la empresa de la factura.
+    const userCompanies = await getUserCompanies();
+    const company = userCompanies.find((c) => c.id === inv.company_id);
+    if (!company) {
+      throw new Error("No tienes acceso a esta factura");
+    }
+
+    const [lines, customer, settings] = await Promise.all([
+      db
+        .select()
+        .from(invoice_lines)
+        .where(eq(invoice_lines.invoice_id, invoiceId))
+        .orderBy(invoice_lines.line_index),
+      inv.customer_id
+        ? db
+            .select()
+            .from(customers)
+            .where(eq(customers.id, inv.customer_id))
+            .limit(1)
+            .then((r) => r[0] ?? null)
+        : Promise.resolve(null),
+      db
+        .select()
+        .from(company_settings)
+        .where(eq(company_settings.company_id, inv.company_id))
+        .limit(1)
+        .then((r) => r[0] ?? null),
+    ]);
+
+    const buffer = await renderInvoicePdfBuffer({
+      factura: {
+        id: inv.id,
+        formatted_number: inv.formatted_number,
+        series_code: inv.series_code,
+        issued_at: inv.issued_at,
+        due_date: inv.due_date,
+        rectifies_invoice_id: inv.rectifies_invoice_id,
+        rectification_reason: inv.rectification_reason,
+        client_name: customer?.name,
+        client_tax_id: customer?.tax_id,
+        client_address: customer?.address,
+        subtotal_cents: inv.subtotal_cents,
+        vat_total_cents: inv.vat_total_cents,
+        total_cents: inv.total_cents,
+        qr_code_url: inv.qr_code_url,
+        lines,
+      },
+      empresa: { name: company.name, tax_id: company.tax_id, address: company.address },
+      settings,
+    });
+
+    return {
+      success: true,
+      pdfBase64: buffer.toString("base64"),
+      filename: `Factura_${inv.formatted_number}.pdf`,
+    };
+  } catch (error: any) {
+    console.error("❌ ERROR GENERANDO PDF:", error);
+    return { success: false, error: error?.message || "Error al generar el PDF." };
   }
 }

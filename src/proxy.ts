@@ -57,6 +57,8 @@ export async function proxy(request: NextRequest) {
   // - /api/cron/* (disparado por un cron externo, sin cookies de usuario)
   // - /api/admin/* (lo llama el backend de la web de marketing; se protege
   //   con su propio secreto en el header `x-admin-secret`, no con la sesión)
+  // - /presupuesto/* (página pública de aceptación de presupuestos, sin sesión)
+  // - /api/presupuesto/* (PDF público de un presupuesto, sin sesión)
   const isPublicRoute =
     pathname.startsWith('/login') ||
     pathname.startsWith('/recuperar-password') ||
@@ -64,7 +66,9 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith('/registro') ||
     pathname.startsWith('/api/auth/') ||
     pathname.startsWith('/api/cron/') ||
-    pathname.startsWith('/api/admin/');
+    pathname.startsWith('/api/admin/') ||
+    pathname.startsWith('/presupuesto') ||
+    pathname.startsWith('/api/presupuesto/');
 
   // 4. Lógica de protección de rutas
   if (!session && !isPublicRoute) {

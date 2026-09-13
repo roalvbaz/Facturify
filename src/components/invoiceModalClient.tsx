@@ -8,6 +8,14 @@ import InvoicePDFTemplate from '@/components/invoicePDFTemplate';
 import { sendInvoiceByEmailAction } from '@/actions/email.actions';
 import { showToast } from '@/lib/utils/toast';
 
+/** Motivos de rectificación reglamentarios (RD 1619/2012 / AEAT). */
+const RECTIFY_REASONS = [
+  { tag: 'R1', title: 'Error fundado en derecho', desc: 'Rectificación de importes o de errores de la factura previa.' },
+  { tag: 'R2', title: 'Concurso de acreedores', desc: 'La contraparte entra en concurso de acreedores.' },
+  { tag: 'R3', title: 'Crédito incobrable', desc: 'Impago que justifica considerar el crédito incobrable.' },
+  { tag: 'R4', title: 'Devolución de mercancías o rescisión', desc: 'Devolución de mercancías, envases o rescisión de la operación.' },
+];
+
 export default function InvoiceModalClient({
   factura,
   empresa,
@@ -34,7 +42,7 @@ export default function InvoiceModalClient({
   const [sendingEmail, setSendingEmail] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [showRectifyConfirm, setShowRectifyConfirm] = useState(false);
-  const [rectifyReason, setRectifyReason] = useState('R1 - Error en factura previa / rectificación de importes');
+  const [rectifyReason, setRectifyReason] = useState(RECTIFY_REASONS[0].tag + ' - ' + RECTIFY_REASONS[0].title);
   const [mounted, setMounted] = useState(false);
 
   const isControlled = controlledIsOpen !== undefined;
@@ -62,14 +70,13 @@ export default function InvoiceModalClient({
   }, [showModal]);
 
   const handleDownload = async () => {
-    const element = document.getElementById(`printable-invoice-${factura.id || 'preview'}`);
-    if (!element) {
+    if (!factura.id) {
       showToast.error('No se encontró la factura para generar el PDF.');
       return;
     }
     setDownloading(true);
     try {
-      await descargarFacturaPDF(element, factura.formatted_number || 'Factura-Borrador');
+      await descargarFacturaPDF(factura.id, factura.formatted_number || 'Factura-Borrador');
     } catch (err: any) {
       showToast.error(err?.message || 'Error al generar el PDF. Inténtalo de nuevo.');
     } finally {
@@ -87,11 +94,10 @@ export default function InvoiceModalClient({
     setSendingEmail(true);
 
     try {
-      const element = document.getElementById(`printable-invoice-${factura.id || 'preview'}`);
+      // El PDF se genera en servidor (sin html2canvas): no se cuelga.
       let pdfBase64: string | undefined = undefined;
-      
-      if (element) {
-        const base64 = await generarFacturaBase64PDF(element);
+      if (factura.id) {
+        const base64 = await generarFacturaBase64PDF(factura.id);
         if (base64) pdfBase64 = base64;
       }
 
@@ -140,7 +146,7 @@ export default function InvoiceModalClient({
     sessionStorage.setItem('FacturON_rectification_data', JSON.stringify(rectificationData));
     setShowRectifyConfirm(false);
     handleClose();
-    router.push('/nueva-factura?mode=rectification');
+    router.push('/nuevoPresupuesto?mode=rectification');
   };
 
   const handleConfirmSave = () => {
@@ -252,9 +258,9 @@ export default function InvoiceModalClient({
                   type="button"
                   onClick={() => setShowRectifyConfirm(true)} 
                   style={{ 
-                    background: '#fef2f2', 
-                    color: '#dc2626', 
-                    border: '1px solid #fca5a5', 
+                    backgroundColor: 'var(--danger-bg)',
+                  color: 'var(--danger)',
+                  border: '1px solid var(--danger-border)', 
                     padding: '8px 14px', 
                     borderRadius: '6px', 
                     cursor: 'pointer', 
@@ -379,8 +385,8 @@ export default function InvoiceModalClient({
                   width: '40px',
                   height: '40px',
                   borderRadius: '50%',
-                  backgroundColor: '#fee2e2',
-                  color: '#dc2626',
+                  backgroundColor: 'var(--danger-bg)',
+                  color: 'var(--danger)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -391,7 +397,7 @@ export default function InvoiceModalClient({
                 <i className="fas fa-file-invoice-dollar"></i>
               </div>
               <div>
-                <h4 style={{ margin: 0, fontSize: '1.05rem', color: '#0f172a', fontWeight: 800 }}>
+                <h4 style={{ margin: 0, fontSize: '1.05rem', color: 'var(--text-main)', fontWeight: 800 }}>
                   Emitir Factura Rectificativa
                 </h4>
                 <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
@@ -400,32 +406,68 @@ export default function InvoiceModalClient({
               </div>
             </div>
 
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#334155', marginBottom: '0.35rem' }}>
+            <div style={{ marginBottom: 0 }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
                 Motivo de la rectificación (Código AEAT)
               </label>
-              <select
-                value={rectifyReason}
-                onChange={(e) => setRectifyReason(e.target.value)}
-                className="form-control"
-                style={{ width: '100%', height: '45px', fontSize: '0.85rem' }}
-              >
-                <option value="R1 - Error fundado en derecho">
-                  R1 - Error fundado en derecho / importes
-                </option>
-                <option value="R4 - Devolución de mercancías o rescisión">
-                  R4 - Devolución o anulación de operación
-                </option>
-                <option value="R2 - Concurso de acreedores">
-                  R2 - Concurso de acreedores
-                </option>
-                <option value="R3 - Crédito incobrable">
-                  R3 - Crédito incobrable judicial
-                </option>
-              </select>
+
+              {/* Tarjetas seleccionables de motivo (antes un <select> plano) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+                {RECTIFY_REASONS.map((r) => {
+                  const value = `${r.tag} - ${r.title}`;
+                  const selected = rectifyReason === value;
+                  return (
+                    <button
+                      key={r.tag}
+                      type="button"
+                      onClick={() => setRectifyReason(value)}
+                      aria-pressed={selected}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'flex-start',
+                        gap: '10px',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        padding: '10px 12px',
+                        borderRadius: '10px',
+                        border: selected ? '2px solid var(--danger)' : '1px solid var(--border-color)',
+                        backgroundColor: selected ? 'var(--danger-bg)' : 'var(--card-bg)',
+                        transition: 'border-color 0.12s ease, background-color 0.12s ease',
+                      }}
+                    >
+                      <span
+                        style={{
+                          flexShrink: 0,
+                          width: '18px',
+                          height: '18px',
+                          marginTop: '1px',
+                          borderRadius: '50%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: '0.6rem',
+                          color: '#ffffff',
+                          backgroundColor: selected ? 'var(--danger)' : 'transparent',
+                          border: selected ? 'none' : '2px solid var(--border-color)',
+                        }}
+                      >
+                        {selected && <i className="fas fa-check"></i>}
+                      </span>
+                      <span>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 800, color: selected ? 'var(--danger)' : 'var(--text-main)' }}>
+                          {r.tag} · {r.title}
+                        </span>
+                        <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px', lineHeight: 1.35 }}>
+                          {r.desc}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b', lineHeight: '1.35' }}>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)', lineHeight: '1.35' }}>
               Se abrirá el editor con la <strong>Serie R</strong> asignada y los conceptos en negativo para emitir el abono reglamentario.
             </p>
 
@@ -452,7 +494,7 @@ export default function InvoiceModalClient({
                 onClick={handleExecuteRectify}
                 className="btn"
                 style={{
-                  backgroundColor: '#dc2626',
+                  backgroundColor: 'var(--danger)',
                   color: '#ffffff',
                   border: 'none',
                   padding: '0.45rem 1.15rem',

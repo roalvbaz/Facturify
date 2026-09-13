@@ -120,6 +120,10 @@ export const invoices = pgTable(
     rectification_type: varchar('rectification_type', { length: 32 }), // 'DIFERENCIAS' | 'SUSTITUCION'
     rectification_reason: text('rectification_reason'), // Ej: 'R1 - Error fundado en derecho'
 
+    // Trazabilidad: presupuesto del que nació (si se creó convirtiendo un estimate)
+    source_estimate_id: uuid('source_estimate_id')
+      .references((): any => estimates.id, { onDelete: 'set null' }),
+
     // Campos de encadenamiento e integridad Veri*factu
     prev_hash: text('prev_hash'),
     current_hash: text('current_hash'),
@@ -207,11 +211,15 @@ export const estimates = pgTable('estimates', {
   expiry_date: timestamp('expiry_date'),
   status: varchar('status', { length: 32 }).default('Borrador').notNull(), // 'Borrador' | 'Enviado' | 'Aceptado' | 'Rechazado' | 'Facturado'
   converted_invoice_id: uuid('converted_invoice_id')
-    .references(() => invoices.id, { onDelete: 'set null' }), // Enlace a la factura generada tras aprobar
+    .references((): any => invoices.id, { onDelete: 'set null' }), // Enlace a la factura generada tras aprobar
   subtotal_cents: integer('subtotal_cents').default(0).notNull(),
   vat_total_cents: integer('vat_total_cents').default(0).notNull(),
   total_cents: integer('total_cents').default(0).notNull(),
   notes: text('notes'),
+  accept_token: text('accept_token'),                          // Token claro del enlace público
+  accept_token_hash: varchar('accept_token_hash', { length: 64 }), // SHA-256 del token
+  accepted_at: timestamp('accepted_at'),                       // Cuándo aceptó el cliente
+  client_note: text('client_note'),                            // Nota del cliente (rechazo / solicitud)
   created_at: timestamp('created_at').defaultNow().notNull(),
 });
 
@@ -220,10 +228,12 @@ export const estimate_lines = pgTable('estimate_lines', {
   estimate_id: uuid('estimate_id')
     .references(() => estimates.id, { onDelete: 'cascade' })
     .notNull(),
+  line_index: integer('line_index').default(0),                // Orden del concepto
   description: text('description'),
   quantity: numeric('quantity', { precision: 20, scale: 6 }).default('1').notNull(),
   unit_price_cents: integer('unit_price_cents').default(0).notNull(),
   vat_percent: numeric('vat_percent', { precision: 5, scale: 2 }).notNull(),
+  vat_amount_cents: integer('vat_amount_cents').default(0),    // IVA en céntimos
   total_amount_cents: integer('total_amount_cents').default(0).notNull(),
 });
 
@@ -316,6 +326,12 @@ export const invitations = pgTable(
     status: varchar('status', { length: 32 }).notNull().default('ENVIADA'), // 'ENVIADA' | 'REGISTRADA' | 'CANCELADA'
     expires_at: timestamp('expires_at').notNull(), // Caducidad del enlace de registro (7 días)
     created_by: uuid('created_by'), // Quién creó la invitación (admin), null si vino del API de marketing
+    // Contexto de invitaciones de EQUIPO: cuando un OWNER/ADMIN invita a un
+    // email a una empresa. company_id NULL = invitación de plataforma (/invitaciones).
+    company_id: uuid('company_id').references(() => companies.id, {
+      onDelete: 'cascade',
+    }),
+    invited_role: varchar('invited_role', { length: 32 }).default('MEMBER'), // 'MEMBER' | 'ADMIN' (nunca OWNER)
     responded_at: timestamp('responded_at'), // Cuándo el invitado completó su registro
     created_at: timestamp('created_at').defaultNow().notNull(),
   },

@@ -25,6 +25,8 @@
   --sidebar-text: #94a3b8;
   --sidebar-hover: #22415d;
   --danger: #e11d48;
+  --danger-bg: #fef2f2;
+  --danger-border: #fecaca;
   --success: #059669;
   --warning: #d97706;
   --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
@@ -343,6 +345,8 @@ body {
   --sidebar-bg: #080f1a;
   --sidebar-text: #94a3b8;
   --sidebar-hover: #162032;
+  --danger-bg: rgba(225, 29, 72, 0.16);
+  --danger-border: rgba(225, 29, 72, 0.42);
   --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 8px -1px rgba(0, 0, 0, 0.45), 0 2px 4px -1px rgba(0, 0, 0, 0.35);
   --shadow-lg: 0 12px 20px -4px rgba(0, 0, 0, 0.45), 0 4px 8px -2px rgba(0, 0, 0, 0.35);
@@ -403,10 +407,10 @@ body {
 .invoice-document * {
   color-scheme: light !important;
 }
-.dark .invoice-document,
-.dark .invoice-document * {
-  color: initial !important;
-}
+/* Sin override de colores en dark mode: la plantilla define colores fijos
+   legibles sobre fondo blanco (inline), así el tema oscuro no la altera.
+   (Antes `color: initial !important` rompía los textos sobre cabeceras
+   de plantilla de color / degradado.) */
 .dark .invoice-document {
   background-color: #ffffff !important;
 }
