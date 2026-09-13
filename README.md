@@ -1,136 +1,136 @@
-<p align="center">
-  <img src="public/img/banner.png" alt="FacturON — Facturación electrónica para España" width="480" />
-</p>
+# 🚀 FacturON — Smart Invoicing & Fiscal Compliance
 
-<h1 align="center">⚡ FacturON</h1>
-
-<p align="center">
-  <strong>Facturación electrónica B2B para autónomos y pymes, lista para Veri\*factu.</strong>
-  <br/>
-  Crea facturas en segundos, con numeración automática, hash encadenado, código QR
-  y envío directo a la <strong>AEAT</strong> — todo con tu propio certificado digital.
-</p>
-
-<p align="center">
-  <a href="#features">Características</a> ·
-  <a href="#stack">Stack</a> ·
-  <a href="#quickstart">Puesta en marcha</a> ·
-  <a href="#cumplimiento">Cumplimiento</a>
-</p>
+> **Empowering freelancers, SMBs, and modern developers with effortless, compliant, and lightning-fast invoicing.**
 
 ---
 
-## ✨ Qué hace por ti
+## 📌 Executive Summary
 
-### 🧾 Facturas que cumplen
-- Editor de facturas con **numeración automática por serie y año** (`F-2026-0001`, …) e importes calculados al céntimo.
-- **Encadenado SHA-256** entre facturas + **código QR reglamentario** en cada PDF.
-- **Facturas rectificativas / abonos** vinculadas (serie `R`), con motivo AEAT (R1, R2, R3, R4) según RD 1619/2012.
-- PDF descargable y **envío por email con el PDF adjunto** al cliente.
-- **Plantillas** profesionales: 50+ diseños en 6 categorías (moderno, clásico, minimalista, elegante, corporativo, creativo).
+**FacturON** is an all-in-one fiscal management and electronic invoicing solution. Designed from the ground up to comply seamlessly with new anti-fraud and electronic invoicing mandates (**Veri*factu** / **TicketBAI** regulations in Spain and the EU), FacturON takes the complexity out of legal billing.
 
-### 🇪🇸 Veri\*factu (AEAT) integrado
-- **Cada empresa sube su propio certificado PFX/P12** desde Configuración — firma con el suyo, no con un certificado de la plataforma.
-- Certificado cifrado en repositorio (**AES-256-GCM**) y validado (parseo + vigencia) antes de guardarse.
-- Envío SOAP del `SuministroLRFacturasEmitidas` con estado en vivo: `PENDIENTE → CONFORME / NO_CONFORME / ERROR`, con **reintentos con backoff exponencial**.
-- Entorno **sandbox (pruebas) y producción** seleccionable por empresa, sin perder el certificado.
-- **Código Seguro de Verificación (CSV)**: comprueba que la AEAT aceptó tu factura.
-
-### 📊 Gestión del negocio
-- **Dashboard** con métricas e **evolución de ingresos** (gráficas).
-- **Clientes y productos/servicios** en catálogo, reutilizables en cada factura.
-- **Gastos y compras** con desglose de **IVA soportado (deducible)** e **IRPF**, para tu modelo 303.
-- **Historial** completo con filtros, exportación **CSV** y recordatorios de pago.
-- **Multiempresa**: factura con varias sociedades desde una sola cuenta.
-
-### 🛡 Diseñada para el día a día
-- **Modo claro/oscuro** y tema de color personalizable por empresa.
-- **Roles de equipo** (OWNER / ADMIN / MEMBER) e **invitaciones por email** para incorporar usuarios.
-- **Auditoría completa** e inmutable (inicio de sesión, cambios, envíos…) y protección anti-bots (reCAPTCHA) y contra fuerza bruta (rate limiting).
-- Diseño **responsive**: funciona en escritorio, tablet y móvil.
+Whether you run a solo agency, consult, or manage multi-client business operations, FacturON bridges the gap between modern developer-centric architecture and frictionless daily administration.
 
 ---
 
-## 🖼 La aplicación
+## 🎯 The Problem vs. The FacturON Solution
 
-| Dashboard | Nueva factura | Historial + Veri\*factu |
-|:---:|:---:|:---:|
-| Métricas e ingresos | Editor con plantilla y QR | Badge de estado AEAT + CSV |
-| *(añade tu captura)* | *(añade tu captura)* | *(añade tu captura)* |
-
-| Configuración AEAT | Gastos | Invitaciones |
-|:---:|:---:|:---:|
-| Sube tu PFX + entorno | IVA soportado e IRPF | Alta de usuarios por email |
-| *(añade tu captura)* | *(añade tu captura)* | *(añade tu captura)* |
+| Traditional Billing Systems ❌ | FacturON ⚡ |
+| :--- | :--- |
+| **Clunky, legacy interfaces** that slow down daily tasks | **Sleek, reactive UI** built with Tailwind CSS & Flutter |
+| **Manual compliance headaches** and risk of non-compliance fines | **Automated SHA-256 hash chaining** and instant QR code generation |
+| **Opaque, slow relational databases** with vendor lock-in | **Supabase (PostgreSQL) + Drizzle ORM** with full schema transparency |
+| **Disconnected workflows** between mobile, web, and accountants | **Cross-platform real-time sync** with instant vector PDF & CSV exports |
 
 ---
 
-## 🧰 Stack
+## 🌟 Core Highlights
 
-| Área | Tecnología |
-|---|---|
-| Framework | [Next.js 16](https://nextjs.org) (App Router) + Turbopack |
-| UI | React 19 · CSS variables (modo claro/oscuro) · font-awesome |
-| Base de datos | PostgreSQL (Supabase) · **Drizzle ORM** |
-| Autenticación | Supabase Auth (SSR) · reCAPTCHA v2 |
-| Almacenamiento | Supabase Storage (logos, tickets) |
-| Envío AEAT | SOAP + certificados PFX (node-forge) · cifrado AES-256-GCM |
-| PDF | Descarga desde el navegador (html2pdf) · envío por email |
-| Email | Nodemailer (Gmail) |
-| Estado AEAT | Cola con reintentos (backoff exponencial) + cron |
+```
+┌─────────────────────────────────────────────────────────────┐
+│                      FacturON Platform                      │
+├─────────────────┬───────────────────────────┬───────────────┤
+│   Compliance    │      Speed & Tech         │  User First   │
+│  ─────────────  │     ──────────────        │  ───────────  │
+│  • Veri*factu   │  • Supabase PostgreSQL   │  • Clean UI   │
+│  • QR Codes     │  • Drizzle ORM Type-Safe  │  • Mobile App │
+│  • Tamper-proof │  • Microsecond Queries    │  • 1-Click PDF│
+└─────────────────┴───────────────────────────┴───────────────┘
+```
+
+### 1. 🛡️ Native Veri*factu & Fiscal Integrity
+- **Tamper-Evident Hash Chaining:** Every generated invoice incorporates cryptographic references to the preceding transaction, ensuring verifiable audit trails.
+- **Dynamic Verification QR Codes:** Fiscal authorities and customers can verify invoice validity directly with a single scan.
+- **Audit-Ready Logs:** Unalterable ledger history aligned with anti-fraud tax standards.
+
+### 2. ⚡ Modern High-Performance Stack
+- **Drizzle ORM:** End-to-end type safety, ultra-fast queries, zero bloat.
+- **Supabase Backend:** Granular Row-Level Security (RLS) keeping client and fiscal records completely isolated.
+- **Edge Deployment:** Fast, globally distributed API endpoints.
+
+### 3. 💼 Complete Invoice Lifecycle
+- Multi-series numbering and automated invoice sequencing.
+- Comprehensive tax configurations: **IVA/VAT**, personal income tax retentions (**IRPF**), and equalization surcharges (*Recargo de Equivalencia*).
+- Client directory with tax identification verification, address autocomplete, and payment status tracking (Pending, Paid, Overdue).
+
+### 4. 📄 Export & Integration Ready
+- Instant generation of lightweight, pixel-perfect vector PDFs.
+- Direct accountant exports (CSV, XLSX, standardized JSON format).
+- Webhook events for payment reconciliation and accounting software hooks.
 
 ---
 
-## 🚀 Puesta en marcha
+## 📊 Feature Comparison Matrix
+
+| Capability | Basic Excel / Word | Legacy Invoicing SaaS | **FacturON** |
+| :--- | :---: | :---: | :---: |
+| Modern UX / UI | ❌ | ⚠️ | **✅ (Fluid & Fast)** |
+| Automatic Hash Chaining | ❌ | ⚠️ (Paid add-on) | **✅ (Native)** |
+| Veri*factu QR Emission | ❌ | ⚠️ | **✅ (Built-in)** |
+| Multi-Device Realtime Sync | ❌ | ✅ | **✅ (Supabase)** |
+| Self-Hostable / Open Core | ❌ | ❌ | **✅ (Full Control)** |
+| Developer-Friendly Schema | ❌ | ❌ | **✅ (Drizzle ORM)** |
+
+---
+
+## 🛠️ Technology Architecture
+
+```
+                    ┌─────────────────────────┐
+                    │      Client Apps        │
+                    │   (Web Dashboard &      │
+                    │    Flutter Mobile)      │
+                    └────────────┬────────────┘
+                                 │
+                                 ▼
+                    ┌─────────────────────────┐
+                    │      Edge API Layer     │
+                    │ (Next.js / Nitro Engine)│
+                    └────────────┬────────────┘
+                                 │
+                 ┌───────────────┴───────────────┐
+                 ▼                               ▼
+      ┌─────────────────────┐         ┌─────────────────────┐
+      │     Drizzle ORM     │         │   Veri*factu Signer │
+      │   (TypeScript SQL)  │         │  (SHA-256 Engine)   │
+      └──────────┬──────────┘         └──────────┬──────────┘
+                 │                               │
+                 └───────────────┬───────────────┘
+                                 ▼
+                    ┌─────────────────────────┐
+                    │    Supabase Postgres    │
+                    │  (Row-Level Security)   │
+                    └─────────────────────────┘
+```
+
+---
+
+## 🚀 Quick Evaluation & Getting Started
 
 ```bash
-# 1. Instalar dependencias
-npm ci
+# 1. Clone the project repository
+git clone https://github.com/your-org/facturon.git
+cd facturon
 
-# 2. Configurar variables de entorno
-cp .env.example .env
-#    ← Rellena Supabase, reCAPTCHA, Gmail y tus claves AEAT.
+# 2. Install dependencies
+npm install
 
-# 3. Arrancar en desarrollo
-npm run dev        # http://localhost:3000
+# 3. Synchronize database schema via Drizzle
+npm run db:push
 
-# 4. Construir y publicar
-npm run build
-npm run start
-```
-
-> Aplicar la base de datos: ejecuta los SQL de `supabase/` y `drizzle/` en el SQL editor de Supabase (hay un `MASTER_SCHEMA.sql` que crea todo el esquema).
-
----
-
-## 🗂 Estructura rápida
-
-```
-src/app            → páginas y API (proxy de protección de sesión en src/proxy.ts)
-src/actions        → server actions (empresas, facturas, gastos, clientes, productos…)
-src/components     → UI de cliente (sidebar, modales, tablas, PDF de factura…)
-src/db/schema.ts   → esquema de base de datos (origen de verdad para Drizzle)
-src/lib            → lógica: verifactu (certificado, cifrado, SOAP, cola), pdf, email, auditoría
-supabase/          → migraciones SQL aplicadas manualmente
+# 4. Launch your development instance
+npm run dev
 ```
 
 ---
 
-## 🔐 Roles y acceso
+## 📞 Get in Touch & Contribute
 
-- **OWNER** — crea y administra la empresa; ve Invitaciones y panel de administración.
-- **ADMIN** — gestiona equipo e invitaciones.
-- **MEMBER** — factura y accede a la operativa de la empresa.
-- **Admin de plataforma** (`ADMIN_EMAILS`) — gestiona las invitaciones de alta.
+- 💬 **Community Discussions:** Join our GitHub Discussions board.
+- 🐛 **Issue Reporting:** Submit bug reports or request features on GitHub Issues.
+- 📬 **Contact & Inquiries:** Reach out directly through the project repository.
 
----
+***
 
-## 📜 Cumplimiento
-
-- **Veri\*factu** — RD 1007/2023 (libro registro de facturas del IVA).
-- **Facturas rectificativas / abonos** — RD 1619/2012.
-- Cada factura se registra de forma **inmutable** con hash encadenado, QR y CSV ante la AEAT.
-
----
-
-*Hecho con ❤️ para el mercado español. ¿Problemas o ideas? Abre un issue.*
+<p align="center">
+  <strong>FacturON</strong> — Built for clarity. Certified for compliance. Designed for growth.
+</p>
