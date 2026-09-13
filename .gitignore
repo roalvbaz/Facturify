@@ -7,8 +7,6 @@ docs
 dist
 build
 .next
-.claude
-.github
 drizzle
 supabase
 
